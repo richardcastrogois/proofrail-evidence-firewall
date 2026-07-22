@@ -1,0 +1,121 @@
+# Plano de evolução em quatro dias
+
+Este plano transforma o Proofrail de laboratório em um primeiro serviço demonstrável. O recorte principal é **agente de IA que solicita deploy**. Local, Preview/Testnet e Preprod são gates sucessivos; não devem ser tratados como três produtos diferentes.
+
+## Resultado esperado ao final
+
+Uma solicitação real identifica agente, tarefa, repositório, commit, artefato, serviço e ambiente. Conectores independentes comprovam identidade, permissão, CI e segurança. Produção exige revisão humana. A política gera uma decisão, a Midnight registra a âncora e um executor controlado aceita um permit uma única vez.
+
+## Dia 01 — contrato da aplicação e política segura
+
+Objetivo: fazer o domínio representar corretamente agente + deploy antes de integrar sistemas externos.
+
+Entregas:
+
+- criar o cenário `agent_deploy` e torná-lo o piloto inicial;
+- vincular a ação a agente, tarefa, repositório, SHA, digest, serviço, ambiente, ferramenta, risco e nonce;
+- separar fontes obrigatórias de fonte de revisão;
+- exigir revisão para produção ou risco acima do limite automático;
+- negar risco acima do limite absoluto;
+- incluir o commitment completo da ação em cada recibo;
+- vincular o permit à versão da política, âncora, rede, contrato e validade;
+- comprovar `DENY -> REVIEW_REQUIRED -> ALLOW -> execução -> replay bloqueado`;
+- atualizar site, MCP e documentação sem chamar simulação de produção.
+
+Estado em 19/07/2026: **concluído no modo local**. Testes de core, typecheck, build e fluxo HTTP passaram. A interface foi inspecionada no navegador. O fluxo ainda usa origens e executor simulados.
+
+Critério de aceite:
+
+```text
+0 fontes                         -> DENY
+4 fontes técnicas               -> REVIEW_REQUIRED
+4 fontes + responsável humano   -> ALLOW
+primeiro consumo do permit       -> sucesso
+segundo consumo                  -> HTTP 409
+```
+
+## Dia 02 — primeiro conector real e identidade
+
+Objetivo: remover a principal simulação ligando o Proofrail a um repositório e pipeline reais.
+
+Entregas:
+
+- preparar ou recuperar o repositório Git válido; hoje o diretório local não possui metadados Git utilizáveis;
+- criar uma GitHub App com permissões mínimas de leitura de repositório, checks e artefatos;
+- receber webhook autenticado com validação HMAC sobre o corpo bruto, delivery ID e idempotência;
+- consultar o check suite pelo SHA exato, nunca por branch mutável;
+- validar que o digest informado pertence ao build daquele SHA;
+- modelar identidade do agente/gateway MCP com chave ou workload identity rotacionável;
+- substituir pelo menos `Pipeline CI` por um recibo real assinado pelo conector;
+- guardar segredos fora de `data/store.json` e impedir log de token, seed ou payload sensível;
+- adicionar testes de assinatura inválida, webhook repetido, SHA trocado e artefato substituído.
+
+Estado em 20/07/2026: **implementação concluída e validada localmente; a validação contra um repositório real depende das credenciais e da instalação do GitHub App**.
+
+Implementado:
+
+- repositório Git local restaurado em branch `main`, ainda sem commit automático;
+- GitHub App com token de instalação limitado ao repositório e `Actions: read`;
+- webhook sobre corpo bruto com HMAC SHA-256, allowlist, installation ID e `X-GitHub-Delivery` idempotente; colisão do mesmo ID com outro conteúdo retorna `409`;
+- consulta do workflow concluído com sucesso pelo SHA exato;
+- validação de artefato não expirado e digest SHA-256 pertencente ao mesmo workflow run;
+- identidade Ed25519 rotacionável do agente e assinatura da ação canônica;
+- recibo real de `Pipeline CI`, assinado pelo adaptador Proofrail depois da verificação externa;
+- chaves das origens e do permit migradas para `data/private/signing-secrets.json`, fora do store e do Git;
+- limite de 10 s e 1 MB nas respostas consumidas da API do GitHub;
+- recibo CI armazenado só é reutilizado depois de reverificar sua assinatura;
+- testes de função e de rota HTTP para ação alterada, HMAC alterado, replay, colisão, digest substituído e recibo adulterado.
+
+Pendente de evidência operacional: criar/instalar o GitHub App, configurar o webhook HTTPS e executar o critério abaixo contra um commit e artefato reais. Isso não é simulado pelos testes.
+
+Critério de aceite local atendido: workflow e artefato corretos produzem recibo; outro SHA, check pendente, assinatura incorreta, digest trocado, colisão de delivery e recibo adulterado falham ou exigem nova verificação. A reentrega idêntica é aceita sem duplicar evento. O aceite operacional externo continua pendente até um commit real passar pelo GitHub App instalado.
+
+## Dia 03 — executor controlado, autenticação e Preview
+
+Objetivo: provar que o permit controla uma ação real em ambiente não produtivo.
+
+Entregas:
+
+- adicionar autenticação de serviço e escopos na API;
+- implementar endpoint de aprovação humana com identidade diferente do agente;
+- criar executor restrito inicialmente a `staging`, com allowlist de repositório, workflow, serviço e ambiente;
+- fazer o executor verificar assinatura, commitments, âncora, expiração, nonce e consumo atômico;
+- nunca aceitar comando shell arbitrário enviado pelo agente;
+- financiar carteira Preview/Testnet, gerar DUST conforme o Wallet SDK e implantar o contrato próprio da rede;
+- executar testes positivos e negativos em Preview;
+- adicionar observabilidade correlacionada por `requestId`, sem dados brutos.
+
+Critério de aceite: uma solicitação aprovada publica apenas em staging e gera transação Preview; qualquer alteração no escopo ou replay falha antes do deploy.
+
+## Dia 04 — endurecimento Compact, Preprod e operação
+
+Objetivo: reduzir a confiança no backend e preparar uma demonstração técnica responsável.
+
+Entregas:
+
+- adicionar administradores/registradores autorizados ao contrato Compact conforme o padrão de owner commitment e witness da documentação Midnight;
+- provar no circuito as regras críticas que couberem no recorte: autorização do registrador, versão/commitment da política, quantidade, contradição, validade e replay;
+- definir rotação/revogação de emissores e procedimento de emergência;
+- executar threat model e testes de abuso do contrato, API, webhook e executor;
+- financiar e implantar contrato separado em Preprod;
+- repetir a matriz negativa antes da demonstração positiva;
+- preparar runbook, rollback, backup, recuperação e evidências do teste;
+- publicar uma tabela final de garantias, limitações e riscos aceitos.
+
+Critério de aceite: somente registrador autorizado ancora; Preview e Preprod possuem contratos e carteiras separados; o executor recusa qualquer permit que não corresponda à ação ancorada.
+
+## Ordem dos ambientes
+
+1. **Local:** desenvolvimento, testes rápidos e falhas intencionais.
+2. **Preview/Testnet:** integração pública, faucet, sincronização e comportamento de rede.
+3. **Preprod:** ensaio operacional final com configuração e contrato independentes.
+
+Uma rede só avança quando a anterior passa tanto o caminho positivo quanto falsificação, contradição, expiração, replay, troca de SHA, troca de artefato e chamador não autorizado.
+
+## Referências oficiais Midnight consultadas
+
+- [Adquirir tokens de teste](https://docs.midnight.network/guides/acquire-tokens)
+- [Bulletin Board DApp](https://docs.midnight.network/examples/dapps/bboard)
+- [Documentação Midnight](https://docs.midnight.network/)
+
+As referências foram verificadas em 19/07/2026. Antes de executar Preview ou Preprod, confirme novamente endpoints, faucet e versões do toolchain, pois são dependências externas mutáveis.

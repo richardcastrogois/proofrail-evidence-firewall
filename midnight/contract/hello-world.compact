@@ -1,0 +1,67 @@
+pragma language_version >= 0.23;
+
+import CompactStandardLibrary;
+
+export enum Decision {
+  DENY,
+  REVIEW_REQUIRED,
+  ALLOW
+}
+
+struct DecisionAnchor {
+  evidenceRoot: Bytes<32>,
+  policyCommitment: Bytes<32>,
+  actionCommitment: Bytes<32>,
+  decision: Decision,
+  validUntil: Uint<64>,
+  evidenceCount: Uint<16>,
+  requiredEvidenceCount: Uint<16>,
+  contradictionCount: Uint<16>
+}
+
+export ledger anchors: Map<Uint<64>, DecisionAnchor>;
+export ledger usedAllowActions: Set<Bytes<32>>;
+export ledger nextId: Counter;
+
+export circuit registerDecision(
+  evidenceRoot: Bytes<32>,
+  policyCommitment: Bytes<32>,
+  actionCommitment: Bytes<32>,
+  decision: Decision,
+  validUntil: Uint<64>,
+  evidenceCount: Uint<16>,
+  requiredEvidenceCount: Uint<16>,
+  contradictionCount: Uint<16>
+): Uint<64> {
+  const publicDecision = disclose(decision);
+  const publicActionCommitment = disclose(actionCommitment);
+
+  assert(validUntil > 0, "validity must be positive");
+  assert(requiredEvidenceCount > 0, "evidence is required");
+
+  if (publicDecision == Decision.ALLOW) {
+    assert(evidenceCount >= requiredEvidenceCount, "insufficient evidence");
+    assert(contradictionCount == 0, "contradictions block ALLOW");
+    assert(!usedAllowActions.member(publicActionCommitment), "ALLOW action already anchored");
+    usedAllowActions.insert(publicActionCommitment);
+  }
+
+  nextId.increment(1);
+  const anchorId = disclose(nextId.read() as Uint<64>);
+
+  anchors.insert(
+    anchorId,
+    DecisionAnchor {
+      evidenceRoot: disclose(evidenceRoot),
+      policyCommitment: disclose(policyCommitment),
+      actionCommitment: publicActionCommitment,
+      decision: publicDecision,
+      validUntil: disclose(validUntil),
+      evidenceCount: disclose(evidenceCount),
+      requiredEvidenceCount: disclose(requiredEvidenceCount),
+      contradictionCount: disclose(contradictionCount)
+    }
+  );
+
+  return anchorId;
+}

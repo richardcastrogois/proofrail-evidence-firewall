@@ -1,0 +1,148 @@
+# Proofrail na Midnight: estado real e próximos passos
+
+## Resposta curta
+
+O projeto já executa uma integração real com uma devnet Midnight local: carteira, node, indexer, proof server, prova, transação e contrato Compact. Também conhece os ambientes públicos Preview/Testnet e Preprod.
+
+Isso não significa que a visão de produção esteja completa. O GitHub CI já possui um primeiro conector real opcional; as demais origens ainda são simuladas e o backend ainda calcula boa parte da decisão. O contrato reforçado valida o resumo enviado, mas ainda não prova dentro do circuito todas as assinaturas, regras e fatos privados.
+
+## O que foi validado
+
+| Camada | Estado atual |
+|---|---|
+| React + API | nove cenários; agente + deploy é o piloto principal |
+| Core | ausência, commitment incorreto, contradição, revisão humana e replay testados |
+| Criptografia local | Ed25519, AES-256-GCM, SHA-256 e Merkle root |
+| Permit | assinado, vinculado, temporário, ancorado e de uso único |
+| Compact | compila e registra decisões na devnet local |
+| Devnet local | node, indexer e proof server em Docker |
+| Preview/Testnet | configurada; implantação depende de faucet/saldo |
+| Preprod | configurada; implantação depende de faucet/saldo |
+| Fontes empresariais reais | GitHub CI implementado; demais fontes ainda não integradas |
+| Execução empresarial real | ainda simulada |
+
+O endereço atual de cada contrato não deve ser copiado para a documentação, porque muda a cada implantação. A fonte correta é:
+
+```powershell
+Get-Content (Join-Path (Get-Location) "midnight-chain\.midnight-state.json")
+```
+
+## O que o contrato Compact verifica agora
+
+Cada âncora contém:
+
+- Merkle root das evidências aceitas;
+- commitment da política;
+- commitment da ação;
+- decisão;
+- validade;
+- quantidade de fontes comprovadas;
+- quantidade mínima exigida;
+- quantidade de contradições.
+
+Para `ALLOW`, o circuito exige:
+
+- quantidade comprovada maior ou igual à exigida;
+- zero contradições;
+- action commitment ainda não utilizado em outro `ALLOW`.
+
+Os dados brutos não são enviados à cadeia. Commitments e decisão são divulgados de propósito para auditoria.
+
+## Segurança fora do contrato
+
+A API também verifica:
+
+- cenário e tipo de ação iguais aos da política;
+- mesma `requestId`, sujeito, referência e valor;
+- assinatura e chave pública do recibo;
+- origem/classe exigida;
+- validade temporal;
+- ausência de contradições;
+- assinatura e expiração do permit;
+- commitments do permit iguais aos da decisão;
+- existência da âncora antes da execução;
+- consumo único do permit.
+
+No fluxo agente + deploy, o permit também fica vinculado à versão da política, ao identificador e validade da âncora, à rede e ao contrato. Uma evidência só serve quando seu `actionCommitment` corresponde ao conjunto completo de agente, tarefa, repositório, commit, artefato, serviço, ambiente, ferramenta, risco, nonce e `requestId`.
+
+A API limita corpo HTTP, escuta em `127.0.0.1`, restringe CORS ao localhost e deixa a leitura do dado bruto desativada, salvo quando `ALLOW_RAW_EVIDENCE_READ=true` for definido conscientemente.
+
+## Limite criptográfico que ainda existe
+
+O circuito recebe as contagens e os commitments preparados pelo backend. Portanto, ele impede inconsistências simples, mas não recalcula sozinho toda a política privada.
+
+Uma migração completa precisa fazer o circuito verificar o bundle privado:
+
+- assinaturas dos emissores;
+- registro, rotação e revogação de chaves autorizadas;
+- classes de origem e independência;
+- vínculo de todos os campos com a ação;
+- frescor e expiração;
+- contradições;
+- versão e commitment da política;
+- limite de risco;
+- autorização de quem pode registrar decisões.
+
+Witnesses são dados off-chain e não devem ser tratados como confiáveis sem assertions no circuito.
+
+### Risco P0 do contrato atual
+
+O circuito ainda não restringe qual identidade pode chamar `registerDecision`. Isso significa que uma implantação pública não deve ser tratada como pronta enquanto o contrato não verificar um registrador autorizado. A referência oficial Bulletin Board demonstra o padrão de owner commitment + witness privado; a adaptação ao Proofrail precisa ser compilada, testada contra chamador indevido e implantada separadamente em cada rede.
+
+## Local, Preview/Testnet e Preprod
+
+| Tela | ID técnico | Infraestrutura | Uso recomendado |
+|---|---|---|---|
+| Local | `undeployed` | node, indexer e proof server locais | desenvolvimento e testes rápidos |
+| Testnet | `preview` | rede pública + proof server configurado | demonstração pública e integração |
+| Preprod | `preprod` | rede pública + proof server configurado | ensaio antes de produção |
+
+Cada rede tem sua própria carteira e contrato no arquivo `.midnight-state.json`. Para preparar:
+
+```powershell
+PowerShell -ExecutionPolicy Bypass -File .\scripts\05-scaffold-midnight.ps1 -Network undeployed
+PowerShell -ExecutionPolicy Bypass -File .\scripts\05-scaffold-midnight.ps1 -Network preview
+PowerShell -ExecutionPolicy Bypass -File .\scripts\05-scaffold-midnight.ps1 -Network preprod
+```
+
+Preview e Preprod mostram endereço e faucet na primeira tentativa. Financie a carteira com tNIGHT e execute o mesmo comando novamente. O botão da tela passa a funcionar quando a implantação daquela rede existir.
+
+Segundo o guia oficial atual, o faucet entrega tNIGHT para um endereço **unshielded**. A carteira usa tNIGHT para delegar/gerar DUST; faucet, sincronização e maturação são dependências externas e podem limitar o teste no mesmo dia. Consulte sempre [Acquire tokens](https://docs.midnight.network/guides/acquire-tokens) antes de financiar uma rede.
+
+## Definition of Done para produção
+
+A visão completa só deve ser chamada de pronta quando:
+
+- pelo menos uma origem externa real produzir evidência verificável;
+- emissores autorizados tiverem rotação e revogação;
+- a política crítica for comprovada dentro do circuito;
+- somente uma identidade autorizada puder registrar ou atualizar a política;
+- dados privados não aparecerem no estado público;
+- testes negativos falharem dentro da prova;
+- o executor real rejeitar chamadas sem permit válido;
+- segredos estiverem em KMS/HSM;
+- API tiver identidade, escopo, rate limit e trilha imutável;
+- persistência transacional e idempotência distribuída estiverem implementadas;
+- o fluxo completo passar em Preview e depois Preprod.
+
+## Ordem recomendada
+
+1. Manter a devnet local como laboratório reproduzível.
+2. Integrar uma API assinada real como primeira origem.
+3. Criar registro on-chain de emissores e administradores autorizados.
+4. Mover regras e validações críticas para o circuito Compact.
+5. Criar testes de contrato para falsificação, expiração, contradição e replay.
+6. Colocar o permit como requisito técnico de um executor real controlado.
+7. Adicionar KMS/HSM, PostgreSQL, autenticação e observabilidade.
+8. Implantar em Preview, executar testes negativos e repetir em Preprod.
+
+## Diagnóstico honesto
+
+O Proofrail demonstra bem a tese: autodeclaração não basta, evidência isolada pode não bastar, contradição bloqueia, provas compatíveis liberam uma ação e os dados brutos podem perder a chave sem apagar a auditabilidade.
+
+O ponto mais forte é a separação entre evidência, decisão, autorização e execução. O maior risco ainda é a concentração de confiança no backend e nas origens que permanecem simuladas. O próximo passo é validar o conector GitHub contra um repositório real, adicionar identidade/scanner/aprovação independentes e fazer o circuito verificar a parte crítica da política.
+
+Referências oficiais verificadas em 19/07/2026:
+
+- [Midnight: acquire tokens](https://docs.midnight.network/guides/acquire-tokens)
+- [Midnight: Bulletin Board DApp](https://docs.midnight.network/examples/dapps/bboard)

@@ -1,0 +1,35 @@
+node_modules/
+dist/
+.vite/
+coverage/
+
+# Configuração local de agentes/IDE; pode conter caminhos absolutos da máquina.
+.codex/
+.agents/
+.vscode/
+.idea/
+
+# Segredos e configurações locais. Somente o modelo documentado é versionado.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Estado e dados privados da aplicação.
+data/store.json
+data/raw/
+data/private/
+data/store.v*.backup-*.json
+.tmp/
+midnight-chain/
+*.log
+.midnight-state.json
+.midnight-wallet-state/
+
+# Arquivos do sistema operacional.
+.DS_Store
+Thumbs.db
+Desktop.ini
