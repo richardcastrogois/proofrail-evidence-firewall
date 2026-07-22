@@ -20,6 +20,12 @@
   "engines": {
     "node": ">=22"
   },
+  "overrides": {
+    "@hono/node-server": "2.0.10"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0"
+  },
   "devDependencies": {
     "@types/node": "^22.15.0",
     "concurrently": "^9.2.0",
