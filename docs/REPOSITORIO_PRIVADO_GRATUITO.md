@@ -15,7 +15,8 @@ Não descreva o GitHub privado gratuito como branch protegida. O workflow execut
 - `.gitignore` bloqueia credenciais, chaves, estado da carteira, dados brutos, artefatos e configurações locais;
 - `.github/workflows/ci.yml` valida pull requests e `main` no GitHub;
 - `.gitlab-ci.yml` valida merge requests e a branch padrão no GitLab;
-- Dependabot acompanha npm e GitHub Actions;
+- o próprio pipeline executa `npm audit` nas dependências de produção;
+- atualizações de dependências são abertas de forma controlada no GitLab, uma por vez, em vez de duplicar pull requests automáticos no espelho GitHub;
 - nenhum secret de produção deve ser cadastrado enquanto o serviço ainda estiver em laboratório.
 
 ## Configuração obrigatória no GitLab
@@ -34,12 +35,20 @@ Depois de importar o projeto como **Private**:
 
 Como existe apenas um mantenedor, uma aprovação humana independente ainda não pode ser garantida gratuitamente. Para mudanças críticas, solicite revisão a uma segunda pessoa antes do merge, mesmo quando a plataforma não a exigir.
 
+## Estado verificado em 22/07/2026
+
+- `main`, `gitlab/main` e `origin/main` apontavam para o mesmo commit após o primeiro Merge Request protegido;
+- o pipeline do GitLab e o workflow do GitHub passaram no mesmo conteúdo;
+- o GitLab ficou com somente a branch `main` após excluir a branch já mesclada;
+- as sete branches automáticas do Dependabot que sustentavam pull requests no GitHub eram ruído do espelho e foram removidas;
+- a configuração `.github/dependabot.yml` foi retirada para impedir que esse ruído volte. O audit de segurança continua nos dois pipelines.
+
 ## Fluxo diário
 
 ```powershell
 git switch main
 git pull --ff-only gitlab main
-git switch -c feat/nome-curto
+git switch -c codex/nome-curto
 
 # desenvolver e validar
 npm ci
@@ -48,7 +57,7 @@ npm test
 npm run typecheck
 npm run build
 
-git push -u gitlab feat/nome-curto
+git push -u gitlab codex/nome-curto
 ```
 
 Crie um Merge Request para `main`. O GitLab deve impedir push direto e bloquear o merge até o pipeline `verify` ficar verde.
@@ -62,6 +71,16 @@ git push origin main
 ```
 
 Nunca use `git push --force` em `main`, `git add -f` para incluir arquivo ignorado ou copie secrets entre as plataformas.
+
+### Sobre o botão “Publicar Branch” do VS Code
+
+Não use esse botão sem conferir o remoto: o VS Code pode escolher `origin`, que neste projeto é apenas o espelho GitHub. Publique explicitamente no repositório principal:
+
+```powershell
+git push -u gitlab codex/nome-curto
+```
+
+Depois crie o Merge Request no GitLab, aguarde o pipeline verde e faça o merge. Só então sincronize `main` no GitHub.
 
 ## Remotes esperados
 

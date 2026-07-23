@@ -11,8 +11,7 @@ Este diretório concentra a documentação destinada a desenvolvedores, avaliado
 5. [`GITHUB_APP.md`](GITHUB_APP.md) — configuração do conector GitHub com privilégio mínimo.
 6. [`MIGRACAO_MIDNIGHT.md`](MIGRACAO_MIDNIGHT.md) — garantias atuais e evolução do contrato/provas na Midnight.
 7. [`PLANO_4_DIAS.md`](PLANO_4_DIAS.md) — histórico do plano incremental e critérios de aceite.
-8. [`PUBLICACAO_GITHUB.md`](PUBLICACAO_GITHUB.md) — checklist seguro para o primeiro commit e envio ao GitHub.
-9. [`REPOSITORIO_PRIVADO_GRATUITO.md`](REPOSITORIO_PRIVADO_GRATUITO.md) — estratégia GitLab privado principal + GitHub privado como espelho, proteção da `main` e fluxo diário.
+8. [`REPOSITORIO_PRIVADO_GRATUITO.md`](REPOSITORIO_PRIVADO_GRATUITO.md) — estratégia GitLab privado principal + GitHub privado como espelho, proteção da `main` e fluxo diário.
 
 ## O que nunca deve ser publicado
 

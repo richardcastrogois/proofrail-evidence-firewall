@@ -66,7 +66,8 @@ Abra <http://localhost:5173> e mantenha o terminal aberto para acompanhar `[API]
 
 - [Índice completo da documentação](docs/README.md)
 - [Entender, apresentar e testar o produto](docs/GUIA_DO_PROJETO.md)
-- [Plano de quatro dias e estado do Dia 01](docs/PLANO_4_DIAS.md)
+- [Plano de quatro dias e estado dos Dias 01 e 02](docs/PLANO_4_DIAS.md)
+- [Fluxo privado GitLab principal + GitHub espelho](docs/REPOSITORIO_PRIVADO_GRATUITO.md)
 - [Modelo de ameaças e bloqueios de produção](docs/SEGURANCA.md)
 - [Configurar e validar o conector GitHub App](docs/GITHUB_APP.md)
 - [Instalar e executar no Windows](docs/SETUP_WINDOWS.md)
