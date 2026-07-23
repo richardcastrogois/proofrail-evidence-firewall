@@ -59,3 +59,9 @@ Se `origin` já existir, não o adicione novamente. Confira se aponta para o rep
 - proteja `main` exigindo o workflow **Proofrail CI** antes de merge;
 - não crie secrets até configurar o GitHub App conscientemente;
 - escolha uma licença antes de permitir reutilização externa. Sem `LICENSE`, o código continua protegido por direitos autorais padrão.
+
+## 6. Limite do plano gratuito privado
+
+No plano gratuito de uma conta pessoal, o workflow do GitHub Actions continua executando, mas as regras de proteção não são aplicadas ao repositório privado. Não torne o código público apenas para contornar essa limitação.
+
+Para manter privacidade e proteção sem custo, use o GitLab Free como repositório principal e o GitHub privado como espelho. O procedimento completo está em [`REPOSITORIO_PRIVADO_GRATUITO.md`](REPOSITORIO_PRIVADO_GRATUITO.md).

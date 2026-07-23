@@ -1,0 +1,35 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - when: never
+
+stages:
+  - verify
+
+default:
+  image: node:22-bookworm-slim
+  interruptible: true
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+
+verify:
+  stage: verify
+  timeout: 20 minutes
+  before_script:
+    - npm ci --cache .npm --prefer-offline
+  script:
+    - npm audit --omit=dev --audit-level=high
+    - npm test
+    - npm run typecheck
+    - npm run build
+  artifacts:
+    name: "proofrail-web-$CI_COMMIT_SHORT_SHA"
+    when: on_success
+    expire_in: 7 days
+    paths:
+      - apps/web/dist/
