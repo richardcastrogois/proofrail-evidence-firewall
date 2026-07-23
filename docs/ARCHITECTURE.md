@@ -92,7 +92,7 @@ Arquivos gerados dentro de `node_modules`, `dist` e `midnight-chain/contracts/ma
 | `docs/MIGRACAO_MIDNIGHT.md` | Garantias reais, limitações e roteiro para uma migração completa. |
 | `docs/GITHUB_APP.md` | Configuração segura do primeiro conector real de CI. |
 | `docs/PLANO_4_DIAS.md` | Plano operacional, critérios de aceite e estado dos incrementos. |
-| `docs/PUBLICACAO_GITHUB.md` | Checklist de revisão, primeiro commit, remote e push. |
+| `docs/REPOSITORIO_PRIVADO_GRATUITO.md` | Fluxo GitLab principal, GitHub espelho, proteção de branch e CI. |
 
 Diretórios como `.codex/`, `.agents/`, `.vscode/`, `data/private/` e `midnight-chain/` são estado local ou gerado e não fazem parte do repositório público.
 

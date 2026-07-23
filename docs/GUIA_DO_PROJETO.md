@@ -199,6 +199,75 @@ O health deve mostrar `mode: cli`. No modo local, os três contêineres Midnight
 
 ## Em que pé o projeto está
 
+### Resumo de 22/07/2026
+
+- **Dia 01 concluído:** o domínio de agente + deploy, as políticas, os commitments, o permit e os caminhos `DENY`, `REVIEW_REQUIRED`, `ALLOW` e replay foram implementados e validados localmente.
+- **Dia 02 concluído no código:** o conector GitHub App, webhook HMAC, consulta por SHA/digest e identidade Ed25519 foram implementados e cobertos por testes locais.
+- **Dia 02 ainda tem uma pendência externa:** criar e instalar o GitHub App em um repositório de teste e receber um workflow real. Sem isso, o conector existe, mas ainda não possui evidência operacional externa.
+- **Versionamento fechado:** GitLab privado é a fonte principal protegida; GitHub privado é o espelho. Os dois pipelines passaram sobre o mesmo commit.
+- **Próximo trabalho:** Dia 03 — autenticação de serviço, aprovação humana separada, executor restrito e validação na Preview/Testnet.
+
+### Git explicado para quem está começando
+
+Pense nestes elementos como partes diferentes:
+
+| Elemento | O que é | Como é usado aqui |
+|---|---|---|
+| repositório local | pasta e histórico na sua máquina | onde você edita, testa e cria commits |
+| branch | linha de trabalho separada | cada etapa nasce em `codex/nome-curto`; `main` contém somente trabalho aprovado |
+| commit | fotografia identificada das alterações | registra exatamente o que mudou e permite auditoria ou retorno controlado |
+| remoto `gitlab` | servidor principal privado | recebe branches, executa pipeline e protege `main` por Merge Request |
+| remoto `origin` | servidor espelho privado no GitHub | mantém portfólio/compatibilidade e executa uma segunda validação |
+| pipeline | robô que instala, audita, testa e compila | impede que um Merge Request com falhas seja aceito no GitLab |
+| Merge Request | pedido para incorporar uma branch à `main` | é o ponto de revisão e controle no GitLab |
+
+Fluxo seguro, sempre a partir do PowerShell em `C:\dev\rational-gate`:
+
+```powershell
+git switch main
+git pull --ff-only gitlab main
+git switch -c codex/minha-alteracao
+
+# editar e validar
+npm audit --omit=dev --audit-level=high
+npm test
+npm run typecheck
+npm run build
+
+git add docs/GUIA_DO_PROJETO.md
+git commit -m "tipo: resumo objetivo"
+git push -u gitlab codex/minha-alteracao
+```
+
+No GitLab, crie o Merge Request, aguarde o pipeline verde e faça o merge. Depois sincronize o espelho:
+
+```powershell
+git switch main
+git pull --ff-only gitlab main
+git push origin main
+```
+
+Não clique em **Publicar Branch** sem verificar o remoto, não envie diretamente para `main` e não use `git add -f`. O arquivo `.gitignore` existe para impedir que `.env`, chaves, estado da carteira e dados privados entrem no commit.
+
+### Última validação antes do Dia 03
+
+Em 22/07/2026, a base foi reinstalada no ambiente correto do projeto (Ubuntu/WSL) e passou por uma rodada completa:
+
+- `npm audit --omit=dev --audit-level=high`: 0 vulnerabilidades;
+- `npm test`: conector GitHub, webhook, migração do store e as 9 políticas passaram;
+- `npm run typecheck`: API, web, MCP, core e schemas passaram;
+- `npm run build`: frontend gerado com sucesso;
+- ação sem evidências: `DENY`, 0 de 5 fontes, ancorada na devnet;
+- trilha completa: `ALLOW`, 5 de 5 fontes, transação `00112e2f…e7f771` no contrato local `ee758d725a…3f0fcb`;
+- leitura independente pelo CLI confirmou o mesmo contrato e `nextId: 8`;
+- permit emitido e consumido uma vez; segunda execução recusada com HTTP `409`;
+- cinco chaves destruídas e dados brutos acessíveis reduzidos a `0 B`;
+- endpoint de dados brutos permaneceu bloqueado com HTTP `403`;
+- frontend respondeu HTTP `200` e API informou `mode: cli`;
+- node, indexer e proof server Midnight permaneceram ativos; são os três containers esperados.
+
+Durante a validação, a inicialização detectou `node_modules` instalado pelo Node do Windows. Como o projeto roda no WSL, o `esbuild` precisava da versão Linux. A correção foi executar `npm ci` dentro do Ubuntu, como já orienta `SETUP_WINDOWS.md`. Não misture `npm install` do Windows com a mesma pasta usada pelo WSL.
+
 ### Funciona hoje
 
 - nove cenários e políticas determinísticas;
@@ -214,6 +283,8 @@ O health deve mostrar `mode: cli`. No modo local, os três contêineres Midnight
 - ancoragem por contrato Compact na Midnight;
 - Local, Testnet/Preview e Preprod selecionáveis;
 - auditoria e apagamento criptográfico.
+- GitLab privado com `main` protegida e pipeline obrigatório;
+- GitHub privado sincronizado como espelho, com workflow de validação independente.
 
 ### Ainda é demonstração
 
@@ -226,6 +297,7 @@ O health deve mostrar `mode: cli`. No modo local, os três contêineres Midnight
 - o circuito valida contagens, contradições e replay de `ALLOW`, porém ainda recebe do backend o resumo da decisão;
 - não existe ainda uma prova Compact completa de cada assinatura, frescor e regra privada;
 - Testnet e Preprod exigem carteira financiada pelo faucet e implantação separada.
+- o GitHub App ainda precisa ser criado/instalado para que o recibo de CI seja validado contra um workflow externo real.
 
 ## Próximas melhorias recomendadas
 

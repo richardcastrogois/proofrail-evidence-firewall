@@ -40,7 +40,7 @@ Objetivo: remover a principal simulação ligando o Proofrail a um repositório 
 
 Entregas:
 
-- preparar ou recuperar o repositório Git válido; hoje o diretório local não possui metadados Git utilizáveis;
+- preparar um repositório Git privado com branch principal protegida e validação automática;
 - criar uma GitHub App com permissões mínimas de leitura de repositório, checks e artefatos;
 - receber webhook autenticado com validação HMAC sobre o corpo bruto, delivery ID e idempotência;
 - consultar o check suite pelo SHA exato, nunca por branch mutável;
@@ -50,11 +50,12 @@ Entregas:
 - guardar segredos fora de `data/store.json` e impedir log de token, seed ou payload sensível;
 - adicionar testes de assinatura inválida, webhook repetido, SHA trocado e artefato substituído.
 
-Estado em 20/07/2026: **implementação concluída e validada localmente; a validação contra um repositório real depende das credenciais e da instalação do GitHub App**.
+Estado em 22/07/2026: **implementação concluída e validada localmente; Git e CI privados estão operacionais, mas a validação do conector contra um workflow real ainda depende das credenciais e da instalação do GitHub App**.
 
 Implementado:
 
-- repositório Git local restaurado em branch `main`, ainda sem commit automático;
+- GitLab privado definido como repositório principal, com `main` protegida, push direto bloqueado e pipeline obrigatório;
+- GitHub privado mantido como espelho, com workflow de validação; os dois remotos foram sincronizados no mesmo commit;
 - GitHub App com token de instalação limitado ao repositório e `Actions: read`;
 - webhook sobre corpo bruto com HMAC SHA-256, allowlist, installation ID e `X-GitHub-Delivery` idempotente; colisão do mesmo ID com outro conteúdo retorna `409`;
 - consulta do workflow concluído com sucesso pelo SHA exato;
@@ -69,6 +70,19 @@ Implementado:
 Pendente de evidência operacional: criar/instalar o GitHub App, configurar o webhook HTTPS e executar o critério abaixo contra um commit e artefato reais. Isso não é simulado pelos testes.
 
 Critério de aceite local atendido: workflow e artefato corretos produzem recibo; outro SHA, check pendente, assinatura incorreta, digest trocado, colisão de delivery e recibo adulterado falham ou exigem nova verificação. A reentrega idêntica é aceita sem duplicar evento. O aceite operacional externo continua pendente até um commit real passar pelo GitHub App instalado.
+
+### Fechamento antes do Dia 03
+
+O fechamento de versionamento foi validado em 22/07/2026:
+
+1. a mudança entrou na `main` do GitLab por Merge Request;
+2. o pipeline do GitLab passou antes do merge;
+3. a mesma `main` foi enviada ao espelho GitHub;
+4. o GitHub Actions passou sobre o mesmo commit;
+5. branches temporárias já mescladas foram removidas;
+6. branches automáticas do Dependabot foram retiradas do espelho, pois o GitLab é a fonte principal e o audit já roda nos dois pipelines.
+
+Isso encerra a infraestrutura Git necessária para começar o Dia 03. Não encerra a pendência externa do GitHub App: integração de CI real e infraestrutura de versionamento são controles relacionados, mas diferentes.
 
 ## Dia 03 — executor controlado, autenticação e Preview
 
