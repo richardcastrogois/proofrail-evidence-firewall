@@ -21,6 +21,7 @@ if (-not (Test-Path $ChainRoot)) {
 
 $ContractTarget = Join-Path $ChainRoot "contracts\hello-world.compact"
 $CliTarget = Join-Path $ChainRoot "src\cli.ts"
+$DeployTarget = Join-Path $ChainRoot "src\deploy.ts"
 
 if (-not (Test-Path (Split-Path -Parent $ContractTarget))) {
     throw "Scaffold incompativel: pasta contracts nao encontrada. Confirme create-mn-app $CreateMnAppVersion."
@@ -40,6 +41,11 @@ Copy-Item `
     $CliTarget `
     -Force
 
+Copy-Item `
+    (Join-Path $ProjectRoot "midnight\overrides\deploy.ts") `
+    $DeployTarget `
+    -Force
+
 $SetupCommand = if ($Network -eq "undeployed") {
     "npm run setup"
 } else {
@@ -48,6 +54,9 @@ $SetupCommand = if ($Network -eq "undeployed") {
 
 Write-Host "Compilando e implantando na rede Midnight '$Network'..." -ForegroundColor Cyan
 wsl -d $Distro -- bash -lc "source ~/.nvm/nvm.sh && cd '$WslChain' && $SetupCommand"
+if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao compilar ou implantar na rede Midnight '$Network'. Veja o erro acima."
+}
 
 Write-Host "`nContrato implantado. Consulte:" -ForegroundColor Green
 Write-Host "$ChainRoot\.midnight-state.json"
