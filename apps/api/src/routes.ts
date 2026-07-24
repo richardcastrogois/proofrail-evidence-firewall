@@ -1,13 +1,18 @@
-import { randomUUID } from "node:crypto";
+import { createPublicKey, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import {
   ActionPermitSchema,
+  ControlledExecutionSchema,
+  CreateApprovalRequestSchema,
+  ExecutePermitRequestSchema,
+  IdempotencyKeySchema,
   NetworkIdSchema,
   ProposedActionSchema,
   SCENARIOS,
   ScenarioIdSchema,
   scenarioById,
+  type ApiErrorCode,
   type ProposedAction,
 } from "@rational/shared";
 import {
@@ -23,6 +28,7 @@ import { z } from "zod";
 import { JsonStore, actionForScenario, auditEvent } from "./store";
 import {
   createGitHubCiEvidence,
+  createApprovalEvidence,
   createSelfDeclaredEvidence,
   createSignedEvidence,
 } from "./origins";
@@ -31,6 +37,7 @@ import {
   GitHubConfigurationError,
   GitHubDeliveryCollisionError,
   GitHubVerificationError,
+  getAgentPublicKeyRegistry,
   getGitHubIntegrationStatus,
   isGitHubObservationFresh,
   loadGitHubRuntimeConfig,
@@ -44,7 +51,18 @@ import {
   getNetworkStatus,
   switchMidnightNetwork,
 } from "./midnight-adapter";
+import {
+  registerServiceAuthentication,
+  sendApiError,
+  type ServiceAuthenticator,
+} from "./service-auth";
 import type { Database } from "./types";
+import {
+  DisabledStagingExecutor,
+  ExecutionNotAllowedError,
+  type StagingDispatch,
+  type StagingExecutor,
+} from "./executor";
 
 const CollectEvidenceSchema = z.object({
   sourceId: z.string().trim().min(1).max(120),
@@ -67,8 +85,49 @@ const VerifyGitHubCiSchema = z.object({
   deliveryId: z.string().uuid().optional(),
 });
 
+class ApprovalRouteError extends Error {
+  constructor(
+    readonly statusCode: number,
+    readonly code:
+      | "INVALID_REQUEST"
+      | "APPROVER_NOT_INDEPENDENT"
+      | "INVALID_APPROVAL_SIGNATURE"
+      | "APPROVAL_CONFLICT",
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+class ExecutionRouteError extends Error {
+  constructor(
+    readonly statusCode: number,
+    readonly code: ApiErrorCode,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 function firstHeader(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function isZodError(error: unknown): boolean {
+  return (
+    error instanceof z.ZodError ||
+    (typeof error === "object" &&
+      error !== null &&
+      "name" in error &&
+      error.name === "ZodError")
+  );
+}
+
+function normalizedPublicKey(publicKeyPem: string): string {
+  return createPublicKey(publicKeyPem)
+    .export({ type: "spki", format: "pem" })
+    .toString()
+    .trim();
 }
 
 function verifyAllEvidence(database: Database): void {
@@ -202,15 +261,21 @@ function permitPayload(permit: z.infer<typeof ActionPermitSchema>) {
   };
 }
 
-function executePermit(
+function executionDispatch(
   database: Database,
   permitId: string,
-): { id: string; permitId: string; action: ProposedAction; executedAt: string } {
+  executor: StagingExecutor,
+  network: Awaited<ReturnType<typeof getNetworkStatus>>,
+): StagingDispatch {
   const decision = database.decisions.find(
     (entry) => entry.permit?.id === permitId,
   );
   if (!decision?.permit || decision.status !== "ALLOW") {
-    throw new Error("Permit not found or decision is not ALLOW");
+    throw new ExecutionRouteError(
+      404,
+      "PERMIT_NOT_FOUND",
+      "An ALLOW permit was not found",
+    );
   }
   const permit = ActionPermitSchema.parse(decision.permit);
   if (
@@ -219,7 +284,11 @@ function executePermit(
     permit.evidenceRoot !== decision.evidenceRoot ||
     permit.policyCommitment !== decision.policyCommitment
   ) {
-    throw new Error("Permit is not bound to the evaluated action and evidence");
+    throw new ExecutionRouteError(
+      403,
+      "PERMIT_INVALID",
+      "The permit is not bound to the evaluated action and evidence",
+    );
   }
   const anchor = database.anchors.find((entry) => entry.id === permit.anchorId);
   if (
@@ -233,9 +302,14 @@ function executePermit(
     anchor.decision !== "ALLOW" ||
     anchor.validUntil !== permit.expiresAt
   ) {
-    throw new Error("Permit is not bound to the persisted ALLOW anchor");
+    throw new ExecutionRouteError(
+      403,
+      "PERMIT_INVALID",
+      "The permit is not bound to the persisted ALLOW anchor",
+    );
   }
   if (
+    permit.policyVersion !== database.policy.version ||
     permit.publicKeyPem !== database.fabricIdentity.publicKeyPem ||
     !verifyCanonical(
       permitPayload(permit),
@@ -243,31 +317,106 @@ function executePermit(
       database.fabricIdentity.publicKeyPem,
     )
   ) {
-    throw new Error("Invalid permit signature");
+    throw new ExecutionRouteError(
+      403,
+      "PERMIT_INVALID",
+      "The permit signature or policy version is invalid",
+    );
   }
   if (new Date(permit.expiresAt).getTime() < Date.now()) {
-    throw new Error("Permit expired");
-  }
-  if (database.executions.some((entry) => entry.permitId === permit.id)) {
-    throw new Error("Permit already consumed");
+    throw new ExecutionRouteError(403, "PERMIT_EXPIRED", "The permit expired");
   }
 
-  const execution = {
-    id: randomUUID(),
-    permitId: permit.id,
-    action: permit.action,
-    executedAt: new Date().toISOString(),
-  };
-  database.executions.push(execution);
-  const scenario = scenarioById(permit.action.scenarioId);
-  database.audit.push(
-    auditEvent(
-      "ACTION_EXECUTED",
-      `${scenario.shortTitle}: ação simulada executada para ${permit.action.referenceId}.`,
-      { executionId: execution.id, permitId: permit.id },
-    ),
+  const action = permit.action;
+  const deployment = action.deployment;
+  if (
+    action.scenarioId !== "agent_deploy" ||
+    action.type !== "authorize_agent_deploy" ||
+    !deployment ||
+    deployment.environment !== "staging" ||
+    deployment.requestedTool !== "deploy"
+  ) {
+    throw new ExecutionRouteError(
+      403,
+      "EXECUTION_NOT_ALLOWED",
+      "Only the closed agent deployment action for staging can be executed",
+    );
+  }
+
+  const localAnchor = permit.anchorNetwork === "local-simulator";
+  const activeAddress =
+    network.active === "undeployed"
+      ? null
+      : network.deployments[network.active];
+  if (
+    (localAnchor && (process.env.MIDNIGHT_MODE ?? "local") !== "local") ||
+    (!localAnchor &&
+      (network.active === "undeployed" ||
+        permit.anchorNetwork !== network.active ||
+        permit.contractAddress !== activeAddress))
+  ) {
+    throw new ExecutionRouteError(
+      403,
+      "PERMIT_INVALID",
+      "The permit anchor does not match the active Midnight deployment",
+    );
+  }
+
+  const ciOrigin = database.origins.find(
+    (entry) =>
+      entry.id === "ci-agent-deploy" && entry.scenarioId === "agent_deploy",
   );
-  return execution;
+  const ciEvidence = database.evidence.find(
+    (entry) =>
+      decision.evidenceIds.includes(entry.id) &&
+      entry.sourceId === "ci-agent-deploy" &&
+      entry.sourceClass === "signed_ci" &&
+      entry.requestId === action.requestId &&
+      entry.actionCommitment === permit.actionCommitment &&
+      entry.verified &&
+      ciOrigin !== undefined &&
+      verifyEvidenceReceipt(entry, ciOrigin.publicKeyPem) &&
+      entry.normalized.repository === deployment.repository &&
+      entry.normalized.artifactDigest === deployment.artifactDigest &&
+      typeof entry.normalized.workflowRunId === "number" &&
+      typeof entry.normalized.workflowName === "string" &&
+      typeof entry.normalized.artifactId === "number" &&
+      typeof entry.normalized.artifactName === "string",
+  );
+  if (!ciEvidence) {
+    throw new ExecutionRouteError(
+      403,
+      "PERMIT_INVALID",
+      "The permit lacks verified GitHub CI artifact provenance",
+    );
+  }
+
+  const dispatch: StagingDispatch = {
+    repository: deployment.repository,
+    commitSha: deployment.commitSha,
+    artifactDigest: deployment.artifactDigest,
+    artifactId: ciEvidence.normalized.artifactId as number,
+    artifactName: ciEvidence.normalized.artifactName as string,
+    workflowRunId: ciEvidence.normalized.workflowRunId as number,
+    serviceId: deployment.serviceId,
+    environment: "staging",
+    requestedTool: "deploy",
+    requestId: action.requestId,
+    permitId: permit.id,
+  };
+  try {
+    executor.assertAllowed(dispatch);
+  } catch (error) {
+    if (error instanceof ExecutionNotAllowedError) {
+      throw new ExecutionRouteError(
+        403,
+        "EXECUTION_NOT_ALLOWED",
+        error.message,
+      );
+    }
+    throw error;
+  }
+  return dispatch;
 }
 
 function expireRequestEvidence(database: Database, requestId: string): number {
@@ -294,7 +443,11 @@ function expireRequestEvidence(database: Database, requestId: string): number {
 export async function registerRoutes(
   app: FastifyInstance,
   store: JsonStore,
+  serviceAuthenticator: ServiceAuthenticator,
+  stagingExecutor: StagingExecutor = new DisabledStagingExecutor(),
 ): Promise<void> {
+  registerServiceAuthentication(app, serviceAuthenticator);
+
   async function evaluateAndPersist(action: ProposedAction) {
     const database = await store.read();
     ensureSelectedAction(database, action);
@@ -610,8 +763,31 @@ export async function registerRoutes(
     });
   });
 
-  app.post("/api/evidence/collect", async (request) => {
+  app.post("/api/evidence/collect", async (request, reply) => {
     const input = CollectEvidenceSchema.parse(request.body);
+    const configuredOrigin = (await store.read()).origins.find(
+      (entry) =>
+        entry.id === input.sourceId &&
+        entry.scenarioId === input.action.scenarioId,
+    );
+    if (!configuredOrigin) {
+      return sendApiError(
+        request,
+        reply,
+        400,
+        "INVALID_REQUEST",
+        "The evidence origin is not configured for this scenario",
+      );
+    }
+    if (configuredOrigin.sourceClass === "signed_approval") {
+      return sendApiError(
+        request,
+        reply,
+        403,
+        "INSUFFICIENT_SCOPE",
+        "Approval evidence can only be created by the approval endpoint",
+      );
+    }
     const privateKeyPem = await store.originPrivateKey(input.sourceId);
     return store.update(async (database) => {
       ensureSelectedAction(database, input.action);
@@ -639,11 +815,228 @@ export async function registerRoutes(
     evaluateAndPersist(ProposedActionSchema.parse(request.body)),
   );
 
+  app.post("/api/approvals", async (request, reply) => {
+    try {
+      const input = CreateApprovalRequestSchema.parse(request.body);
+      const principal = request.servicePrincipal;
+      if (
+        !principal ||
+        principal.kind !== "approver" ||
+        principal.id !== input.approval.approverId
+      ) {
+        throw new ApprovalRouteError(
+          403,
+          "APPROVER_NOT_INDEPENDENT",
+          "The authenticated approver does not match the signed approval",
+        );
+      }
+      const approverKey = serviceAuthenticator.approverKey(
+        input.approval.approverKeyId,
+        input.approval.approverId,
+      );
+      if (!approverKey) {
+        throw new ApprovalRouteError(
+          422,
+          "INVALID_APPROVAL_SIGNATURE",
+          "The approval key is not trusted for this approver",
+        );
+      }
+
+      const snapshot = await store.read();
+      const decision = snapshot.decisions.find(
+        (entry) => entry.id === input.approval.decisionId,
+      );
+      if (
+        !decision ||
+        decision.status !== "REVIEW_REQUIRED" ||
+        decision.action.requestId !== input.approval.requestId ||
+        decision.actionCommitment !==
+          input.approval.actionCommitment ||
+        decision.evidenceRoot !== input.approval.evidenceRoot ||
+        decision.policyCommitment !==
+          input.approval.policyCommitment
+      ) {
+        throw new ApprovalRouteError(
+          422,
+          "INVALID_REQUEST",
+          "The approval is not bound to the persisted review decision",
+        );
+      }
+      const anchor = snapshot.anchors.find(
+        (entry) => entry.id === decision.anchorId,
+      );
+      const now = Date.now();
+      const approvedAt = Date.parse(input.approval.approvedAt);
+      const expiresAt = Date.parse(input.approval.expiresAt);
+      if (
+        !anchor ||
+        expiresAt > Date.parse(anchor.validUntil) ||
+        expiresAt <= now ||
+        approvedAt > now + 5 * 60_000
+      ) {
+        throw new ApprovalRouteError(
+          422,
+          "INVALID_REQUEST",
+          "The approval validity is outside the review decision window",
+        );
+      }
+      const agentId = decision.action.deployment?.agentId;
+      if (
+        !agentId ||
+        agentId === input.approval.approverId
+      ) {
+        throw new ApprovalRouteError(
+          403,
+          "APPROVER_NOT_INDEPENDENT",
+          "The requesting agent cannot approve its own action",
+        );
+      }
+      const approverPublicKey = normalizedPublicKey(
+        approverKey.publicKeyPem,
+      );
+      const agentKeys =
+        getAgentPublicKeyRegistry()[agentId] ?? [];
+      if (
+        agentKeys.some(
+          (key) => normalizedPublicKey(key) === approverPublicKey,
+        )
+      ) {
+        throw new ApprovalRouteError(
+          403,
+          "APPROVER_NOT_INDEPENDENT",
+          "The approver key cannot be registered to the requesting agent",
+        );
+      }
+      if (
+        !verifyCanonical(
+          input.approval,
+          input.signature,
+          approverKey.publicKeyPem,
+        )
+      ) {
+        throw new ApprovalRouteError(
+          422,
+          "INVALID_APPROVAL_SIGNATURE",
+          "The approval signature is invalid",
+        );
+      }
+
+      const originPrivateKey = await store.originPrivateKey(
+        "approval-agent-deploy",
+      );
+      const result = await store.update(async (database) => {
+        const currentDecision = database.decisions.find(
+          (entry) => entry.id === input.approval.decisionId,
+        );
+        if (
+          !currentDecision ||
+          currentDecision.status !== "REVIEW_REQUIRED" ||
+          currentDecision.actionCommitment !==
+            input.approval.actionCommitment ||
+          currentDecision.evidenceRoot !==
+            input.approval.evidenceRoot ||
+          currentDecision.policyCommitment !==
+            input.approval.policyCommitment
+        ) {
+          throw new ApprovalRouteError(
+            409,
+            "APPROVAL_CONFLICT",
+            "The review decision changed before approval persistence",
+          );
+        }
+        const existing = database.approvals.find(
+          (entry) =>
+            entry.approval.decisionId ===
+            input.approval.decisionId,
+        );
+        if (existing) {
+          if (
+            sha256Hex(existing) !==
+            sha256Hex({
+              ...existing,
+              approval: input.approval,
+              signature: input.signature,
+            })
+          ) {
+            throw new ApprovalRouteError(
+              409,
+              "APPROVAL_CONFLICT",
+              "A different approval already exists for this decision",
+            );
+          }
+          const receipt = database.evidence.find(
+            (entry) =>
+              entry.normalized.approvalId === existing.id,
+          );
+          return { approval: existing, receipt, reused: true };
+        }
+        const approval = {
+          id: randomUUID(),
+          approval: input.approval,
+          signature: input.signature,
+          recordedAt: new Date().toISOString(),
+        };
+        const receipt = await createApprovalEvidence({
+          database,
+          action: currentDecision.action,
+          approval,
+          privateKeyPem: originPrivateKey,
+        });
+        const origin = database.origins.find(
+          (entry) => entry.id === "approval-agent-deploy",
+        )!;
+        receipt.verified = verifyEvidenceReceipt(
+          receipt,
+          origin.publicKeyPem,
+        );
+        database.approvals.push(approval);
+        database.evidence.push(receipt);
+        database.audit.push(
+          auditEvent(
+            "HUMAN_APPROVAL_VERIFIED",
+            "Uma aprovação humana independente foi verificada.",
+            {
+              approvalId: approval.id,
+              decisionId: input.approval.decisionId,
+              requestId: input.approval.requestId,
+              approverId: input.approval.approverId,
+              evidenceId: receipt.id,
+            },
+          ),
+        );
+        return { approval, receipt, reused: false };
+      });
+      return reply.code(result.reused ? 200 : 201).send(result);
+    } catch (error) {
+      if (error instanceof ApprovalRouteError) {
+        return sendApiError(
+          request,
+          reply,
+          error.statusCode,
+          error.code,
+          error.message,
+        );
+      }
+      if (isZodError(error)) {
+        return sendApiError(
+          request,
+          reply,
+          400,
+          "INVALID_REQUEST",
+          "The approval request is invalid",
+        );
+      }
+      throw error;
+    }
+  });
+
   app.post("/api/simulation/run", async (request) => {
     const action = ProposedActionSchema.parse(request.body);
     const originKeys = new Map<string, string>();
     const selectedOrigins = (await store.read()).origins.filter(
-      (origin) => origin.scenarioId === action.scenarioId,
+      (origin) =>
+        origin.scenarioId === action.scenarioId &&
+        origin.sourceClass !== "signed_approval",
     );
     for (const origin of selectedOrigins) {
       originKeys.set(origin.id, await store.originPrivateKey(origin.id));
@@ -651,7 +1044,11 @@ export async function registerRoutes(
     await store.update(async (database) => {
       ensureSelectedAction(database, action);
       database.defaultAction = action;
-      const origins = database.origins.filter((origin) => origin.scenarioId === action.scenarioId);
+      const origins = database.origins.filter(
+        (origin) =>
+          origin.scenarioId === action.scenarioId &&
+          origin.sourceClass !== "signed_approval",
+      );
       for (const origin of origins) {
         const receipt = await createSignedEvidence({
           database,
@@ -671,23 +1068,178 @@ export async function registerRoutes(
       }
     });
     const decision = await evaluateAndPersist(action);
-    let execution = null;
-    let expired = 0;
-    if (decision.permit) {
-      execution = await store.update((database) => executePermit(database, decision.permit!.id));
-    }
-    expired = await store.update((database) => expireRequestEvidence(database, action.requestId));
-    return { decision, execution, expired };
+    const expired = await store.update((database) =>
+      expireRequestEvidence(database, action.requestId),
+    );
+    return { decision, execution: null, expired };
   });
 
   app.post("/api/execute", async (request, reply) => {
-    const { permitId } = z.object({ permitId: z.string().uuid() }).parse(request.body);
     try {
-      return await store.update((database) => executePermit(database, permitId));
+      const { permitId } = ExecutePermitRequestSchema.parse(request.body);
+      const idempotencyKey = IdempotencyKeySchema.parse(
+        firstHeader(request.headers["idempotency-key"]),
+      );
+      const network = await getNetworkStatus();
+      const reservation = await store.update((database) => {
+        const priorKey = database.executions.find(
+          (entry) => entry.idempotencyKey === idempotencyKey,
+        );
+        if (priorKey) {
+          if (priorKey.permitId !== permitId) {
+            throw new ExecutionRouteError(
+              409,
+              "IDEMPOTENCY_CONFLICT",
+              "The idempotency key is already bound to another permit",
+            );
+          }
+          return { execution: priorKey, dispatch: null, reused: true };
+        }
+        const dispatch = executionDispatch(
+          database,
+          permitId,
+          stagingExecutor,
+          network,
+        );
+        const consumed = database.executions.find(
+          (entry) =>
+            entry.permitId === permitId ||
+            entry.requestId === dispatch.requestId,
+        );
+        if (consumed) {
+          throw new ExecutionRouteError(
+            409,
+            consumed.status === "pending" || consumed.status === "executing"
+              ? "EXECUTION_IN_PROGRESS"
+              : "PERMIT_ALREADY_CONSUMED",
+            "The permit or action nonce has already been consumed",
+          );
+        }
+        const now = new Date().toISOString();
+        const execution = ControlledExecutionSchema.parse({
+          id: randomUUID(),
+          permitId,
+          requestId: dispatch.requestId,
+          actionCommitment: sha256Hex(
+            database.decisions.find((entry) => entry.permit?.id === permitId)!
+              .permit!.action,
+          ),
+          idempotencyKey,
+          status: "pending",
+          createdAt: now,
+          updatedAt: now,
+          startedAt: null,
+          finishedAt: null,
+          externalReference: null,
+          failureCode: null,
+        });
+        database.executions.push(execution);
+        database.audit.push(
+          auditEvent(
+            "EXECUTION_RESERVED",
+            "O permit foi reservado de forma idempotente antes do efeito externo.",
+            {
+              executionId: execution.id,
+              permitId,
+              requestId: dispatch.requestId,
+            },
+          ),
+        );
+        return { execution, dispatch, reused: false };
+      });
+
+      if (reservation.reused || !reservation.dispatch) {
+        return reply.code(200).send(reservation.execution);
+      }
+
+      const started = await store.update((database) => {
+        const execution = database.executions.find(
+          (entry) => entry.id === reservation.execution.id,
+        )!;
+        execution.status = "executing";
+        execution.startedAt = new Date().toISOString();
+        execution.updatedAt = execution.startedAt;
+        return ControlledExecutionSchema.parse(execution);
+      });
+
+      try {
+        const dispatched = await stagingExecutor.dispatch(reservation.dispatch);
+        const succeeded = await store.update((database) => {
+          const execution = database.executions.find(
+            (entry) => entry.id === started.id,
+          )!;
+          execution.status = "succeeded";
+          execution.finishedAt = new Date().toISOString();
+          execution.updatedAt = execution.finishedAt;
+          execution.externalReference = dispatched.externalReference.slice(
+            0,
+            200,
+          );
+          database.audit.push(
+            auditEvent(
+              "ACTION_EXECUTED",
+              "O workflow fechado de staging foi disparado.",
+              {
+                executionId: execution.id,
+                permitId,
+                requestId: execution.requestId,
+                externalReference: execution.externalReference,
+              },
+            ),
+          );
+          return ControlledExecutionSchema.parse(execution);
+        });
+        return reply.code(201).send(succeeded);
+      } catch (error) {
+        await store.update((database) => {
+          const execution = database.executions.find(
+            (entry) => entry.id === started.id,
+          )!;
+          execution.status = "failed";
+          execution.finishedAt = new Date().toISOString();
+          execution.updatedAt = execution.finishedAt;
+          execution.failureCode = "EXECUTION_FAILED";
+          database.audit.push(
+            auditEvent(
+              "EXECUTION_FAILED",
+              "O efeito externo falhou depois da reserva do permit.",
+              {
+                executionId: execution.id,
+                permitId,
+                requestId: execution.requestId,
+              },
+            ),
+          );
+          return ControlledExecutionSchema.parse(execution);
+        });
+        return sendApiError(
+          request,
+          reply,
+          502,
+          "EXECUTION_FAILED",
+          "The staging workflow dispatch failed",
+        );
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const status = message.includes("already consumed") ? 409 : 403;
-      return reply.code(status).send({ error: message });
+      if (error instanceof ExecutionRouteError) {
+        return sendApiError(
+          request,
+          reply,
+          error.statusCode,
+          error.code,
+          error.message,
+        );
+      }
+      if (isZodError(error)) {
+        return sendApiError(
+          request,
+          reply,
+          400,
+          "INVALID_REQUEST",
+          "A UUID Idempotency-Key header and strict permit request are required",
+        );
+      }
+      throw error;
     }
   });
 

@@ -2,10 +2,11 @@ import { copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { generateSigningIdentity } from "@rational/core";
+import { generateSigningIdentity, sha256Hex } from "@rational/core";
 import {
   SCENARIOS,
   scenarioById,
+  type ControlledExecution,
   type AuditEvent,
   type ProposedAction,
   type ScenarioId,
@@ -21,6 +22,31 @@ export const rawDir = path.join(dataDir, "raw");
 
 interface SeedBundle {
   database: Database;
+  secrets: SigningSecrets;
+}
+
+interface LegacyExecutedAction {
+  id: string;
+  permitId: string;
+  action: ProposedAction;
+  executedAt: string;
+}
+
+type DatabaseV4 = Omit<
+  Database,
+  "schemaVersion" | "approvals" | "executions"
+> & {
+  schemaVersion: 4;
+  executions: LegacyExecutedAction[];
+};
+
+type DatabaseV5 = Omit<Database, "schemaVersion" | "executions"> & {
+  schemaVersion: 5;
+  executions: LegacyExecutedAction[];
+};
+
+interface SeedBundleV4 {
+  database: DatabaseV4;
   secrets: SigningSecrets;
 }
 
@@ -66,13 +92,14 @@ function seedBundle(scenarioId: ScenarioId = "agent_deploy"): SeedBundle {
   const fabricIdentity = generateSigningIdentity();
   return {
     database: {
-      schemaVersion: 4,
+      schemaVersion: 6,
       selectedScenarioId: scenarioId,
       defaultAction: actionForScenario(scenarioId),
       policy: structuredClone(scenario.policy),
       origins: createdOrigins.map((entry) => entry.origin),
       fabricIdentity: { publicKeyPem: fabricIdentity.publicKeyPem },
       githubDeliveries: [],
+      approvals: [],
       evidence: [],
       evidenceSecrets: {},
       decisions: [],
@@ -107,7 +134,7 @@ function isSigningSecrets(value: unknown): value is SigningSecrets {
   );
 }
 
-function migrateV3(current: Record<string, unknown>): SeedBundle {
+function migrateV3(current: Record<string, unknown>): SeedBundleV4 {
   const rawOrigins = Array.isArray(current.origins) ? current.origins : [];
   const rawFabric = current.fabricIdentity as Record<string, unknown> | undefined;
   if (
@@ -140,7 +167,7 @@ function migrateV3(current: Record<string, unknown>): SeedBundle {
     origins,
     fabricIdentity: { publicKeyPem: rawFabric.publicKeyPem },
     githubDeliveries: [],
-  } as unknown as Database;
+  } as unknown as DatabaseV4;
   database.audit.push(
     auditEvent(
       "SIGNING_SECRETS_MIGRATED",
@@ -155,6 +182,52 @@ function migrateV3(current: Record<string, unknown>): SeedBundle {
       fabricPrivateKeyPem: rawFabric.privateKeyPem,
     },
   };
+}
+
+function migrateV4(current: DatabaseV4): DatabaseV5 {
+  const database: DatabaseV5 = {
+    ...current,
+    schemaVersion: 5,
+    approvals: [],
+  };
+  database.audit.push(
+    auditEvent(
+      "APPROVAL_STORE_MIGRATED",
+      "O store passou a persistir aprovações humanas verificadas separadamente.",
+    ),
+  );
+  return database;
+}
+
+function migrateV5(current: DatabaseV5): Database {
+  const executions: ControlledExecution[] = current.executions.map(
+    (execution) => ({
+      id: execution.id,
+      permitId: execution.permitId,
+      requestId: execution.action.requestId,
+      actionCommitment: sha256Hex(execution.action),
+      idempotencyKey: execution.id,
+      status: "succeeded",
+      createdAt: execution.executedAt,
+      updatedAt: execution.executedAt,
+      startedAt: execution.executedAt,
+      finishedAt: execution.executedAt,
+      externalReference: `legacy-simulation:${execution.id}`,
+      failureCode: null,
+    }),
+  );
+  const database: Database = {
+    ...current,
+    schemaVersion: 6,
+    executions,
+  };
+  database.audit.push(
+    auditEvent(
+      "EXECUTION_STORE_MIGRATED",
+      "Execucoes legadas foram convertidas para registros idempotentes.",
+    ),
+  );
+  return database;
 }
 
 export class JsonStore {
@@ -203,8 +276,28 @@ export class JsonStore {
       return;
     }
 
-    if (current.schemaVersion === 4) {
+    if (current.schemaVersion === 6) {
       await this.readSecrets();
+      return;
+    }
+    if (current.schemaVersion === 5) {
+      const backup = path.join(
+        privateDir,
+        `store.v5.backup-${Date.now()}.json`,
+      );
+      await copyFile(storePath, backup);
+      await this.readSecrets();
+      await this.write(migrateV5(current as unknown as DatabaseV5));
+      return;
+    }
+    if (current.schemaVersion === 4) {
+      const backup = path.join(
+        privateDir,
+        `store.v4.backup-${Date.now()}.json`,
+      );
+      await copyFile(storePath, backup);
+      await this.readSecrets();
+      await this.write(migrateV5(migrateV4(current as unknown as DatabaseV4)));
       return;
     }
     if (current.schemaVersion !== 3) {
@@ -220,7 +313,7 @@ export class JsonStore {
     await copyFile(storePath, backup);
     const migrated = migrateV3(current);
     await this.writeSecrets(migrated.secrets);
-    await this.write(migrated.database);
+    await this.write(migrateV5(migrateV4(migrated.database)));
   }
 
   async read(): Promise<Database> {

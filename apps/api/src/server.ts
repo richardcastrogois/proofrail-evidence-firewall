@@ -10,6 +10,11 @@ try {
 
 const { JsonStore } = await import("./store");
 const { registerRoutes } = await import("./routes");
+const { loadServiceAuthenticator } = await import("./service-auth");
+const {
+  DisabledStagingExecutor,
+  loadStagingExecutor,
+} = await import("./executor");
 
 const port = Number(process.env.PORT ?? 3333);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -35,7 +40,20 @@ await app.register(cors, {
 
 const store = new JsonStore();
 await store.init();
-await registerRoutes(app, store);
+const serviceAuthenticator = await loadServiceAuthenticator();
+let stagingExecutor: import("./executor").StagingExecutor =
+  new DisabledStagingExecutor();
+try {
+  stagingExecutor = await loadStagingExecutor();
+} catch (error) {
+  app.log.warn(
+    {
+      reason: error instanceof Error ? error.message : "unknown error",
+    },
+    "Staging executor is disabled",
+  );
+}
+await registerRoutes(app, store, serviceAuthenticator, stagingExecutor);
 
 try {
   await app.listen({ port, host });

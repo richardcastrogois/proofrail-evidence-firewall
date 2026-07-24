@@ -97,6 +97,39 @@ O circuito ainda não restringe qual identidade pode chamar `registerDecision`. 
 | Testnet | `preview` | rede pública + proof server configurado | demonstração pública e integração |
 | Preprod | `preprod` | rede pública + proof server configurado | ensaio antes de produção |
 
+### Snapshot oficial verificado em 23/07/2026
+
+A [matriz de compatibilidade](https://docs.midnight.network/relnotes/support-matrix) da versão estável Ledger 8 informa, para Preview: node `1.0.1`, Compact devtools `0.5.1`, compiler `0.31.1`, Compact runtime `0.16.0`, Compact JS `2.5.1`, Midnight.js `4.1.1`, Wallet SDK `1.2.0`, indexer `4.3.3` e proof server `8.1.0`. A [tabela oficial de ambientes e endpoints](https://docs.midnight.network/relnotes/network) mantém Preview para desenvolvimento inicial, com:
+
+- RPC `https://rpc.preview.midnight.network`;
+- indexer `https://indexer.preview.midnight.network/api/v4/graphql`;
+- faucet `https://midnight-tmnight-preview.nethermind.dev/`.
+
+O projeto está alinhado às versões do compiler, runtime, Midnight.js, Wallet SDK e proof server, além dos endpoints públicos `api/v4`. O node `0.22.5` e o indexer standalone `4.2.1` do `docker-compose.yml` pertencem somente à devnet local reproduzível e permanecem pinados por compatibilidade; a matriz das redes públicas não justifica trocá-los sem validar em conjunto node, indexer, genesis e contrato local.
+
+O registro npm também foi conferido: `create-mn-app` está em `0.4.4`. O
+template oficial dessa versão conserva Compact runtime `0.16.0`, Midnight.js
+`4.1.1`, Wallet SDK `1.2.0` e os mesmos endpoints Preview usados pelo projeto.
+Não há justificativa para migrar para canary ou Wallet SDK 2 beta para contornar
+uma indisponibilidade sem diagnóstico oficial.
+
+O estado local contém uma carteira Preview financiada com `5.000.000.000
+tNight`, mas nenhuma implantação Preview ou Preprod. Em 23/07/2026, o saldo
+sincronizou e o proof server local ficou saudável. Três tentativas de deploy
+(Node 24 e Node 22.13.1) falharam antes do contrato, durante o registro do UTXO
+para geração de DUST: o RPC Preview encerrou `submitAndWatchExtrinsic` com
+WebSocket code `1000`. A submissão não gravou deployment Preview no estado.
+
+Próxima retomada segura:
+
+1. confirmar no status/Discord oficial da Midnight se a submissão Preview está
+   operacional;
+2. executar `npm run check-balance -- --network preview`;
+3. repetir `npm run deploy -- --network preview` com Node 22 e proof server
+   local;
+4. somente após endereço persistido, executar `npm run test:e2e`;
+5. não instalar versões canary/beta como tentativa cega.
+
 Cada rede tem sua própria carteira e contrato no arquivo `.midnight-state.json`. Para preparar:
 
 ```powershell

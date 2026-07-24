@@ -1,0 +1,132 @@
+name: Proofrail controlled staging deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Exact commit bound to the permit
+        required: true
+        type: string
+      artifact_digest:
+        description: Exact CI artifact digest bound to the permit
+        required: true
+        type: string
+      artifact_id:
+        description: GitHub artifact ID verified by Proofrail
+        required: true
+        type: string
+      artifact_name:
+        description: GitHub artifact name verified by Proofrail
+        required: true
+        type: string
+      source_workflow_run_id:
+        description: Successful CI workflow run verified by Proofrail
+        required: true
+        type: string
+      service_id:
+        description: Closed staging service identifier
+        required: true
+        type: string
+      request_id:
+        description: Proofrail request identifier
+        required: true
+        type: string
+      permit_id:
+        description: One-use Proofrail permit identifier
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: proofrail-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Verify and publish exact staging artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    env:
+      EXPECTED_REPOSITORY: richardcastrogois/proofrail-evidence-firewall
+      EXPECTED_SERVICE: proofrail-demo
+      REPOSITORY: ${{ github.repository }}
+      COMMIT_SHA: ${{ inputs.commit_sha }}
+      ARTIFACT_DIGEST: ${{ inputs.artifact_digest }}
+      ARTIFACT_ID: ${{ inputs.artifact_id }}
+      ARTIFACT_NAME: ${{ inputs.artifact_name }}
+      SOURCE_RUN_ID: ${{ inputs.source_workflow_run_id }}
+      SERVICE_ID: ${{ inputs.service_id }}
+      REQUEST_ID: ${{ inputs.request_id }}
+      PERMIT_ID: ${{ inputs.permit_id }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Validate closed deployment inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REPOSITORY" == "$EXPECTED_REPOSITORY" ]]
+          [[ "$SERVICE_ID" == "$EXPECTED_SERVICE" ]]
+          [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$ARTIFACT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$REQUEST_ID" =~ ^[0-9a-f-]{36}$ ]]
+          [[ "$PERMIT_ID" =~ ^[0-9a-f-]{36}$ ]]
+
+      - name: Checkout exact permitted commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs.commit_sha }}
+          persist-credentials: false
+
+      - name: Fetch and verify exact CI artifact metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPOSITORY/actions/artifacts/$ARTIFACT_ID" > artifact.json
+          [[ "$(jq -r .name artifact.json)" == "$ARTIFACT_NAME" ]]
+          [[ "$(jq -r .digest artifact.json)" == "$ARTIFACT_DIGEST" ]]
+          [[ "$(jq -r .expired artifact.json)" == "false" ]]
+          [[ "$(jq -r .workflow_run.id artifact.json)" == "$SOURCE_RUN_ID" ]]
+          [[ "$(jq -r .workflow_run.head_sha artifact.json)" == "$COMMIT_SHA" ]]
+
+      - name: Download exact CI artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > artifact.zip
+          mkdir staging-bundle
+          unzip -q artifact.zip -d staging-bundle
+
+      - name: Record controlled staging deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg serviceId "$SERVICE_ID" \
+            --arg commitSha "$COMMIT_SHA" \
+            --arg artifactDigest "$ARTIFACT_DIGEST" \
+            --arg requestId "$REQUEST_ID" \
+            --arg permitId "$PERMIT_ID" \
+            '{
+              environment: "staging",
+              serviceId: $serviceId,
+              commitSha: $commitSha,
+              artifactDigest: $artifactDigest,
+              requestId: $requestId,
+              permitId: $permitId
+            }' > staging-deployment.json
+          cat staging-deployment.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve staging deployment receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: proofrail-staging-${{ inputs.request_id }}
+          path: staging-deployment.json
+          if-no-files-found: error
+          retention-days: 30

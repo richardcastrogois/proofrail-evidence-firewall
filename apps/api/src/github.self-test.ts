@@ -88,7 +88,7 @@ const workflowPayload = Buffer.from(
       head_sha: deployment.commitSha,
       status: "completed",
       conclusion: "success",
-      html_url: "https://github.com/proofrail/proofrail-demo/actions/runs/101",
+      html_url: "https://github.com/richardcastrogois/proofrail-evidence-firewall/actions/runs/101",
       updated_at: "2026-07-20T12:00:00.000Z",
     },
   }),
@@ -183,7 +183,7 @@ function githubFetch(artifactDigest = deployment.artifactDigest) {
         head_sha: deployment.commitSha,
         status: "completed",
         conclusion: "success",
-        html_url: "https://github.com/proofrail/proofrail-demo/actions/runs/101",
+        html_url: "https://github.com/richardcastrogois/proofrail-evidence-firewall/actions/runs/101",
         updated_at: "2026-07-20T12:00:00.000Z",
       });
     }

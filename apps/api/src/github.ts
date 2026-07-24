@@ -205,6 +205,14 @@ function parseAgentPublicKeys(
   }
 }
 
+export function getAgentPublicKeyRegistry(
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string[]> {
+  return parseAgentPublicKeys(
+    env.PROOFRAIL_AGENT_PUBLIC_KEYS_JSON,
+  );
+}
+
 export function getGitHubIntegrationStatus(
   env: NodeJS.ProcessEnv = process.env,
 ): GitHubIntegrationStatus {
@@ -213,9 +221,7 @@ export function getGitHubIntegrationStatus(
     env.GITHUB_ALLOWED_REPOSITORIES,
   );
   const installationId = Number(env.GITHUB_INSTALLATION_ID);
-  const agentPublicKeys = parseAgentPublicKeys(
-    env.PROOFRAIL_AGENT_PUBLIC_KEYS_JSON,
-  );
+  const agentPublicKeys = getAgentPublicKeyRegistry(env);
 
   if (!env.GITHUB_APP_ID) missingConfiguration.push("GITHUB_APP_ID");
   if (!Number.isSafeInteger(installationId) || installationId <= 0) {
@@ -262,9 +268,7 @@ export function loadGitHubRuntimeConfig(
     webhookSecret: env.GITHUB_WEBHOOK_SECRET!,
     allowedRepositories: status.allowedRepositories,
     requireWebhook: status.requireWebhook,
-    agentPublicKeys: parseAgentPublicKeys(
-      env.PROOFRAIL_AGENT_PUBLIC_KEYS_JSON,
-    ),
+    agentPublicKeys: getAgentPublicKeyRegistry(env),
   };
 }
 

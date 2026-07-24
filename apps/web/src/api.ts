@@ -15,8 +15,7 @@ export interface DeclaredDocument {
   sha256: string;
 }
 
-const baseUrl =
-  import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3333";
+const baseUrl = import.meta.env.VITE_API_URL ?? "";
 
 async function request<T>(
   path: string,
@@ -34,10 +33,14 @@ async function request<T>(
   const payload = await response.json();
 
   if (!response.ok) {
+    const apiMessage =
+      typeof payload.error === "object"
+        ? payload.error?.message
+        : payload.error;
     throw new Error(
-      payload.error === "Internal Server Error"
+      apiMessage === "Internal Server Error"
         ? "Falha interna ao processar a decisão. Consulte os logs [API] no PowerShell."
-        : (payload.error ?? `HTTP ${response.status}`),
+        : (apiMessage ?? `HTTP ${response.status}`),
     );
   }
 
@@ -103,9 +106,10 @@ export const api = {
       body: JSON.stringify(action),
     }),
 
-  execute: (permitId: string) =>
+  execute: (permitId: string, idempotencyKey = crypto.randomUUID()) =>
     request("/api/execute", {
       method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
       body: JSON.stringify({ permitId }),
     }),
 
