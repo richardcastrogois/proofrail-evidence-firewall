@@ -22,6 +22,8 @@ if (-not (Test-Path $ChainRoot)) {
 $ContractTarget = Join-Path $ChainRoot "contracts\hello-world.compact"
 $CliTarget = Join-Path $ChainRoot "src\cli.ts"
 $DeployTarget = Join-Path $ChainRoot "src\deploy.ts"
+$CheckBalanceTarget = Join-Path $ChainRoot "src\check-balance.ts"
+$E2eTarget = Join-Path $ChainRoot "scripts\e2e-check.ts"
 
 if (-not (Test-Path (Split-Path -Parent $ContractTarget))) {
     throw "Scaffold incompativel: pasta contracts nao encontrada. Confirme create-mn-app $CreateMnAppVersion."
@@ -44,6 +46,16 @@ Copy-Item `
 Copy-Item `
     (Join-Path $ProjectRoot "midnight\overrides\deploy.ts") `
     $DeployTarget `
+    -Force
+
+Copy-Item `
+    (Join-Path $ProjectRoot "midnight\overrides\check-balance.ts") `
+    $CheckBalanceTarget `
+    -Force
+
+Copy-Item `
+    (Join-Path $ProjectRoot "midnight\overrides\e2e-check.ts") `
+    $E2eTarget `
     -Force
 
 $SetupCommand = if ($Network -eq "undeployed") {
