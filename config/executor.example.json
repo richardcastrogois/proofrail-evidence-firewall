@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "mode": "github_workflow",
+  "allowedRepositories": [
+    "richardcastrogois/proofrail-evidence-firewall"
+  ],
+  "allowedWorkflow": "staging-deploy.yml",
+  "workflowRef": "main",
+  "allowedServices": [
+    "proofrail-demo"
+  ],
+  "allowedEnvironment": "staging",
+  "allowedTool": "deploy",
+  "tokenEnv": "PROOFRAIL_EXECUTOR_GITHUB_TOKEN",
+  "apiUrl": "https://api.github.com"
+}

@@ -91,6 +91,7 @@ Arquivos gerados dentro de `node_modules`, `dist` e `midnight-chain/contracts/ma
 | `docs/SEGURANCA.md` | Modelo de ameaças, controles implementados e riscos P0/P1. |
 | `docs/MIGRACAO_MIDNIGHT.md` | Garantias reais, limitações e roteiro para uma migração completa. |
 | `docs/GITHUB_APP.md` | Configuração segura do primeiro conector real de CI. |
+| `docs/ETAPA_03_CONTRATOS.md` | Atores, scopes, aprovação assinada, idempotência, estados e erros definidos antes das rotas da Etapa 03. |
 | `docs/PLANO_4_DIAS.md` | Plano operacional, critérios de aceite e estado dos incrementos. |
 | `docs/REPOSITORIO_PRIVADO_GRATUITO.md` | Fluxo GitLab principal, GitHub espelho, proteção de branch e CI. |
 
@@ -117,14 +118,22 @@ Diretórios como `.codex/`, `.agents/`, `.vscode/`, `data/private/` e `midnight-
 | `apps/api/tsconfig.json` | Configuração TypeScript da API. |
 | `apps/api/src/server.ts` | Inicializa Fastify, restringe CORS ao localhost, define limites e registra rotas. |
 | `apps/api/src/routes.ts` | Endpoints, validação Zod, registro de documento autodeclarado, avaliação, âncora, permit, execução, reset e lifecycle. |
-| `apps/api/src/store.ts` | Estado JSON v4, migração fail-closed do v3, separação de chaves privadas e gravação atômica. |
-| `apps/api/src/store-migrate.ts` | Executa e verifica explicitamente a migração do store ativo para o schema v4 sem imprimir segredos. |
+| `apps/api/src/access-control.ts` | Matriz declarativa de autenticação e menor scope por rota; definida no Incremento 03.1 e aplicada a partir do 03.2. |
+| `apps/api/src/day03-contracts.self-test.ts` | Testes negativos dos contratos de principal, aprovação, execução, idempotência, erros e matriz de rotas. |
+| `apps/api/src/service-auth.ts` | Autenticação bearer em tempo constante, cadastro confiável de principals/aprovadores e enforcement da matriz de scopes. |
+| `apps/api/src/service-auth-init.ts` | Gera configuração local separando hashes/chaves públicas dos segredos de cliente, sem imprimir credenciais. |
+| `apps/api/src/approver-cli.ts` | Assina a aprovação canônica com a identidade humana local e chama a rota autenticada. |
+| `apps/api/src/executor.ts` | Executor fechado de `workflow_dispatch`, allowlists e credencial de escrita separada do conector CI. |
+| `apps/api/src/executor.self-test.ts` | Valida request fechado, allowlists, corpo do dispatch e ausência do token no payload. |
+| `apps/api/src/store.ts` | Estado JSON v6, migrações fail-closed v3→v6, separação de chaves e gravação serializada/atômica. |
+| `apps/api/src/store-migrate.ts` | Executa e verifica explicitamente a migração do store ativo para o schema v6 sem imprimir segredos. |
 | `apps/api/src/types.ts` | Tipos internos do banco, identidades de origem e ciphertext. |
 | `apps/api/src/origins.ts` | Recibos simulados e recibo real do GitHub CI: normalização, AES-256-GCM e assinatura. |
 | `apps/api/src/github.ts` | GitHub App, JWT, token de instalação, HMAC do webhook, identidade do agente e validação de workflow/artefato. |
 | `apps/api/src/github.self-test.ts` | Testes positivos e negativos do conector GitHub sem usar credenciais reais. |
 | `apps/api/src/github-routes.self-test.ts` | Teste HTTP isolado do webhook e da verificação CI: HMAC, replay, colisão, commit, artefato e recibo adulterado. |
-| `apps/api/src/store.self-test.ts` | Valida a migração do estado v3 e confirma que chaves privadas não permanecem no store público. |
+| `apps/api/src/approval-routes.self-test.ts` | Testa escopo, independência, commitments, assinatura e replay de aprovação. |
+| `apps/api/src/store.self-test.ts` | Valida migrações v3/v4/v5→v6 e confirma que chaves privadas não permanecem no store público. |
 | `apps/api/src/agent-cli.ts` | Gera identidade local de desenvolvimento e assina a ação canônica do agente. |
 | `apps/api/src/midnight-adapter.ts` | Lê a rede ativa, troca Local/Preview/Preprod e chama a CLI para ancorar. |
 
@@ -143,6 +152,7 @@ Diretórios como `.codex/`, `.agents/`, `.vscode/`, `data/private/` e `midnight-
 | `packages/shared/package.json` | Pacote interno compartilhado. O namespace `@rational/*` foi mantido por compatibilidade. |
 | `packages/shared/tsconfig.json` | Configuração TypeScript do pacote. |
 | `packages/shared/src/index.ts` | Schemas Zod e tipos de ações, recibos, políticas, decisões, redes e estado público. |
+| `packages/shared/src/day03.ts` | Contratos aditivos da Etapa 03 para identidades de serviço, scopes, aprovação assinada, execução idempotente e erros. |
 | `packages/shared/src/scenarios.ts` | Catálogo dos nove cenários, incluindo agente + deploy, papéis `required`/`review`, valores padrão e políticas. |
 
 ### `packages/core` — lógica determinística e criptografia
@@ -207,7 +217,18 @@ O nome físico `hello-world` é uma compatibilidade com o template oficial; o co
 | `data/private/signing-secrets.json` | Chaves privadas locais das origens e do permit; ignorado pelo Git e destinado apenas ao desenvolvimento. |
 | `data/private/agents/*` | Identidades locais opcionais dos agentes de teste; nunca compartilhar ou versionar. |
 | `data/private/store.v3.backup-*.json` | Backup privado criado uma vez durante a migração do schema v3. |
+| `data/private/service-auth.json` | Hashes de tokens e chaves públicas confiadas; lido somente pela API. |
+| `data/private/service-auth-secrets.json` | Tokens de clientes e chave privada do aprovador local; lido por Vite/MCP/CLI, nunca pela API. |
+| `data/private/executor.json` | Allowlists do executor; não contém o token GitHub. |
 | `data/raw/*.json` | Ciphertexts das evidências brutas. Sem a chave AES, a aplicação não os recupera. |
+
+### Executor de staging
+
+O arquivo versionado `config/executor.example.json` documenta o alvo fechado.
+O token fica exclusivamente em `PROOFRAIL_EXECUTOR_GITHUB_TOKEN`. O workflow
+`.github/workflows/staging-deploy.yml` valida repositório, serviço, SHA,
+artifact ID, workflow run e digest antes de criar o deployment `staging`.
+Ausência de configuração ou token mantém o executor desabilitado.
 
 ## Dependências entre mudanças
 

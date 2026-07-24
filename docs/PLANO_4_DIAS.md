@@ -88,6 +88,30 @@ Isso encerra a infraestrutura Git necessária para começar o Dia 03. Não encer
 
 Objetivo: provar que o permit controla uma ação real em ambiente não produtivo.
 
+Estado em 23/07/2026: **03.1, 03.2 e 03.3 concluídos e validados
+localmente; 03.4 bloqueado na submissão Preview**.
+
+Implementado:
+
+- autenticação bearer local com tetos de scopes e separação entre
+  orquestrador, aprovador, executor e operador;
+- aprovação humana Ed25519 independente, vinculada a decisão, request e três
+  commitments;
+- executor fechado de `workflow_dispatch`, somente staging, com credencial
+  separada, allowlists e proveniência do artefato;
+- reserva persistida antes do efeito externo, estados v6, replay idempotente e
+  bloqueio de corrida/segundo consumo;
+- workflow de staging que baixa o artifact ID verificado, confere run, SHA e
+  digest e cria deployment no environment `staging`;
+- suíte integrada verde: testes, typecheck e build.
+
+Gate Preview: a carteira sincronizou com `5.000.000.000 tNight`, o proof server
+local ficou saudável, mas três tentativas de registro do UTXO para geração de
+DUST falharam porque `wss://rpc.preview.midnight.network/` fechou com código
+`1000` durante `submitAndWatchExtrinsic`. O scaffold oficial atual 0.4.4 usa os
+mesmos endpoints e versões centrais do projeto. Nenhum endereço Preview foi
+gravado no estado; não houve teste on-chain positivo.
+
 Entregas:
 
 - adicionar autenticação de serviço e escopos na API;

@@ -1,6 +1,8 @@
 import type {
+  ApprovalRecord,
   AnchorRecord,
   AuditEvent,
+  ControlledExecution,
   DecisionResult,
   EvidencePolicy,
   EvidenceReceipt,
@@ -38,25 +40,19 @@ export interface EvidenceSecret {
   encryptionKeyBase64?: string;
 }
 
-export interface ExecutedAction {
-  id: string;
-  permitId: string;
-  action: ProposedAction;
-  executedAt: string;
-}
-
 export interface Database {
-  schemaVersion: 4;
+  schemaVersion: 6;
   selectedScenarioId: ScenarioId;
   defaultAction: ProposedAction;
   policy: EvidencePolicy;
   origins: OriginRecord[];
   fabricIdentity: FabricIdentityRecord;
   githubDeliveries: GitHubWorkflowDelivery[];
+  approvals: ApprovalRecord[];
   evidence: EvidenceReceipt[];
   evidenceSecrets: Record<string, EvidenceSecret>;
   decisions: DecisionResult[];
   anchors: AnchorRecord[];
-  executions: ExecutedAction[];
+  executions: ControlledExecution[];
   audit: AuditEvent[];
 }

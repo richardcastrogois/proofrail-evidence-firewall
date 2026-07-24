@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "test": "tsx src/github.self-test.ts && tsx src/github-routes.self-test.ts && tsx src/store.self-test.ts",
+    "test": "tsx src/day03-contracts.self-test.ts && tsx src/service-auth.self-test.ts && tsx src/approval-routes.self-test.ts && tsx src/executor.self-test.ts && tsx src/github.self-test.ts && tsx src/github-routes.self-test.ts && tsx src/store.self-test.ts",
     "agent:keygen": "tsx src/agent-cli.ts keygen",
     "agent:sign": "tsx src/agent-cli.ts sign",
+    "approval:create": "tsx src/approver-cli.ts",
+    "service-auth:init": "tsx src/service-auth-init.ts",
     "store:migrate": "tsx src/store-migrate.ts",
     "typecheck": "tsc --noEmit"
   },

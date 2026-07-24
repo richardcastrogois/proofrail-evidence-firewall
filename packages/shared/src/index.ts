@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ControlledExecutionSchema } from "./day03";
 
 export const ScenarioIdSchema = z.enum([
   "agent_deploy",
@@ -337,14 +338,7 @@ export const PublicStateSchema = z.object({
   evidence: z.array(EvidenceReceiptSchema),
   decisions: z.array(DecisionResultSchema),
   anchors: z.array(AnchorRecordSchema),
-  executions: z.array(
-    z.object({
-      id: z.string().uuid(),
-      permitId: z.string().uuid(),
-      action: ProposedActionSchema,
-      executedAt: z.string().datetime(),
-    }),
-  ),
+  executions: z.array(ControlledExecutionSchema),
   audit: z.array(AuditEventSchema),
   metrics: z.object({
     originalRawBytes: z.number(),
@@ -355,4 +349,5 @@ export const PublicStateSchema = z.object({
 });
 export type PublicState = z.infer<typeof PublicStateSchema>;
 
+export * from "./day03";
 export * from "./scenarios";

@@ -1,6 +1,13 @@
 # Conector real GitHub App — Dia 02
 
-Este conector substitui **somente a evidência Pipeline CI** do cenário `agent_deploy`. Identidade corporativa, política de ferramenta, scanner, aprovação humana e executor ainda precisam dos próximos incrementos.
+Este conector substitui **somente a evidência Pipeline CI** do cenário
+`agent_deploy`. Identidade corporativa, política de ferramenta e scanner ainda
+precisam de conectores próprios. A aprovação assinada e o executor staging
+existem, mas usam identidades/credenciais separadas deste App.
+
+> Não amplie este GitHub App para `Actions: write`. O executor usa
+> `PROOFRAIL_EXECUTOR_GITHUB_TOKEN`, limitado ao repositório da allowlist, e
+> nunca reutiliza a credencial de verificação CI.
 
 ## O que ele comprova
 
