@@ -24,6 +24,11 @@ function ConvertTo-WslPath {
     $output = @(& $wslExe -d $Distro -- bash -lc $command 2>&1)
 
     if ($LASTEXITCODE -ne 0) {
+        if ($normalizedPath -match '^([A-Za-z]):/(.*)$') {
+            $drive = $Matches[1].ToLowerInvariant()
+            $relativePath = $Matches[2]
+            return "/mnt/$drive/$relativePath"
+        }
         throw "Nao foi possivel converter '$WindowsPath' para um caminho WSL em '$Distro'. $($output -join ' ')"
     }
 

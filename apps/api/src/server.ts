@@ -1,9 +1,12 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { loadEnvFile } from "node:process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 try {
-  loadEnvFile();
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  loadEnvFile(path.resolve(moduleDir, "../../../.env"));
 } catch (error) {
   if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 }
