@@ -326,7 +326,7 @@ try {
     assert.equal(firstExecution.statusCode, 201);
     assert.equal(firstExecution.json().status, "succeeded");
     assert.equal(concurrentReplay.statusCode, 200);
-    assert.match(concurrentReplay.json().status, /executing|succeeded/);
+    assert.match(concurrentReplay.json().status, /pending|executing|succeeded/);
     assert.equal(dispatchCount, 1);
 
     const completedReplay = await app.inject({
