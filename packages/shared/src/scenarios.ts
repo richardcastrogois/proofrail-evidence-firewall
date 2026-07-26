@@ -117,11 +117,11 @@ const seeds: ScenarioSeed[] = [
     defaultDeployment: {
       agentId: "agent-release-01",
       taskId: "TASK-DEPLOY-2026-001",
-      repository: "proofrail/proofrail-demo",
+      repository: "richardcastrogois/proofrail-evidence-firewall",
       commitSha: "a91c4ad39ff6b8266d04cd22f13e4179f743a903",
       artifactDigest: "sha256:5f70bf18a086007016e948b04aed3b82103a36be44a0c13d57f656979435d25a",
       serviceId: "proofrail-demo",
-      environment: "production",
+      environment: "staging",
       requestedTool: "deploy",
       riskScore: 45,
       nonce: "00000000-0000-4000-8000-000000000002",

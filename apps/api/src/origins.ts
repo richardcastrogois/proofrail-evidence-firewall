@@ -9,7 +9,11 @@ import {
   sha256Hex,
   signCanonical,
 } from "@rational/core";
-import type { EvidenceReceipt, ProposedAction } from "@rational/shared";
+import type {
+  ApprovalRecord,
+  EvidenceReceipt,
+  ProposedAction,
+} from "@rational/shared";
 import { rawDir } from "./store";
 import type { GitHubCiVerification } from "./github";
 import type { Database } from "./types";
@@ -177,6 +181,10 @@ export async function createGitHubCiEvidence(input: {
       status: "passed",
       repository: input.verification.repository,
       artifactDigest: input.verification.artifactDigest,
+      workflowRunId: input.verification.workflowRunId,
+      workflowName: input.verification.workflowName,
+      artifactId: input.verification.artifactId,
+      artifactName: input.verification.artifactName,
     },
     signature: null,
     publicKeyPem: origin.publicKeyPem,
@@ -185,6 +193,91 @@ export async function createGitHubCiEvidence(input: {
       rawAvailable: true,
       rawExpiresAt: new Date(
         observedAt.getTime() + input.database.policy.rawRetentionSeconds * 1000,
+      ).toISOString(),
+      originalBytes: persisted.originalBytes,
+      encryptedBytes: persisted.encryptedBytes,
+      erasureMethod: "key_deletion",
+    },
+  };
+  receipt.signature = signCanonical(
+    evidenceSigningPayload(receipt),
+    input.privateKeyPem,
+  );
+  input.database.evidenceSecrets[id] = {
+    encryptedPath: persisted.encryptedPath,
+    encryptionKeyBase64: persisted.encryptionKeyBase64,
+  };
+  return receipt;
+}
+
+export async function createApprovalEvidence(input: {
+  database: Database;
+  action: ProposedAction;
+  approval: ApprovalRecord;
+  privateKeyPem: string;
+}): Promise<EvidenceReceipt> {
+  const origin = input.database.origins.find(
+    (entry) =>
+      entry.id === "approval-agent-deploy" &&
+      entry.scenarioId === input.action.scenarioId,
+  );
+  if (!origin || !input.action.deployment) {
+    throw new Error("Approval origin is unavailable for this action");
+  }
+
+  const id = randomUUID();
+  const observedAt = new Date(input.approval.approval.approvedAt);
+  const raw = {
+    provider: "proofrail-human-approval",
+    approvalId: input.approval.id,
+    decisionId: input.approval.approval.decisionId,
+    requestId: input.approval.approval.requestId,
+    approverId: input.approval.approval.approverId,
+    approverKeyId: input.approval.approval.approverKeyId,
+    actionCommitment: input.approval.approval.actionCommitment,
+    evidenceRoot: input.approval.approval.evidenceRoot,
+    policyCommitment: input.approval.approval.policyCommitment,
+    status: origin.validValue,
+    approvedAt: input.approval.approval.approvedAt,
+    expiresAt: input.approval.approval.expiresAt,
+  };
+  const persisted = await persistEncryptedRaw(id, raw);
+  const policyExpiry = new Date(
+    observedAt.getTime() +
+      input.database.policy.maxAgeMinutes * 60_000,
+  ).getTime();
+  const approvalExpiry = new Date(
+    input.approval.approval.expiresAt,
+  ).getTime();
+  const receipt: EvidenceReceipt = {
+    id,
+    requestId: input.action.requestId,
+    scenarioId: input.action.scenarioId,
+    claimType: origin.claimType,
+    subjectId: input.action.subjectId,
+    sourceId: origin.id,
+    sourceClass: origin.sourceClass,
+    observedAt: observedAt.toISOString(),
+    expiresAt: new Date(
+      Math.min(policyExpiry, approvalExpiry),
+    ).toISOString(),
+    payloadCommitment: sha256Hex(raw),
+    actionCommitment: sha256Hex(input.action),
+    normalized: {
+      referenceId: input.action.referenceId,
+      value: input.action.value,
+      status: origin.validValue,
+      approverId: input.approval.approval.approverId,
+      approvalId: input.approval.id,
+    },
+    signature: null,
+    publicKeyPem: origin.publicKeyPem,
+    verified: false,
+    lifecycle: {
+      rawAvailable: true,
+      rawExpiresAt: new Date(
+        observedAt.getTime() +
+          input.database.policy.rawRetentionSeconds * 1000,
       ).toISOString(),
       originalBytes: persisted.originalBytes,
       encryptedBytes: persisted.encryptedBytes,

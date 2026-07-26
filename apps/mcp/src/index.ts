@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -14,23 +17,55 @@ const apiUrl =
   process.env.PROOFRAIL_API_URL ??
   process.env.RATIONAL_API_URL ??
   "http://127.0.0.1:3333";
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const authSecretsPath =
+  process.env.PROOFRAIL_SERVICE_AUTH_SECRETS ??
+  path.resolve(
+    moduleDir,
+    "../../../data/private/service-auth-secrets.json",
+  );
+const AuthSecretsSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    tokens: z.record(z.string().min(32)),
+  })
+  .passthrough();
+const serviceTokens = AuthSecretsSchema.parse(
+  JSON.parse(await readFile(authSecretsPath, "utf8")),
+).tokens;
 
 async function api<T>(
   route: string,
   body?: unknown,
   additionalHeaders: Record<string, string> = {},
+  principalId = "orchestrator-local",
 ): Promise<T> {
+  const token = serviceTokens[principalId];
+  if (!token) {
+    throw new Error(
+      `Local service token is unavailable for ${principalId}`,
+    );
+  }
   const response = await fetch(`${apiUrl}${route}`, {
     method: body === undefined ? "GET" : "POST",
-    headers:
-      body === undefined
-        ? undefined
-        : { "Content-Type": "application/json", ...additionalHeaders },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body === undefined
+        ? {}
+        : { "Content-Type": "application/json" }),
+      ...additionalHeaders,
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const payload = (await response.json()) as { error?: string } & T;
+  const payload = (await response.json()) as {
+    error?: string | { message?: string };
+  } & T;
   if (!response.ok) {
-    throw new Error(payload.error ?? `HTTP ${response.status}`);
+    throw new Error(
+      typeof payload.error === "object"
+        ? (payload.error.message ?? `HTTP ${response.status}`)
+        : (payload.error ?? `HTTP ${response.status}`),
+    );
   }
   return payload;
 }
@@ -50,7 +85,7 @@ const server = new McpServer(
   { name: "proofrail", version: "0.2.0" },
   {
     instructions:
-      "Proofrail is an evidence firewall. Its primary pilot binds an AI agent deployment request to an exact task, repository, commit, artifact, service and environment. GitHub CI can be verified through a least-privilege GitHub App; the remaining source buttons and final executor are still laboratory simulations. Policy evaluation, signatures, one-time permits and Midnight anchoring are real. Never treat a self-declaration as trusted origin evidence and never hide contradictions.",
+      "Proofrail is an evidence firewall. Its primary pilot binds an AI agent deployment request to an exact task, repository, commit, artifact, service and environment. GitHub CI uses a read-only GitHub App; the separate executor can dispatch only the configured staging workflow. Policy evaluation, signatures, approvals, idempotent one-time permits and Midnight anchoring are enforced. Never treat a self-declaration as trusted origin evidence and never hide contradictions.",
   },
 );
 
@@ -66,7 +101,14 @@ server.tool(
   "Select one of the nine security scenarios. agent_deploy is the primary pilot; the other scenarios remain policy templates.",
   { scenarioId: ScenarioIdSchema },
   async ({ scenarioId }) =>
-    toolResult(await api("/api/scenario/select", { scenarioId })),
+    toolResult(
+      await api(
+        "/api/scenario/select",
+        { scenarioId },
+        {},
+        "operator-local",
+      ),
+    ),
 );
 
 server.tool(
@@ -74,7 +116,14 @@ server.tool(
   "Switch the active Midnight target. A public network must already have a funded wallet and deployed contract.",
   { network: NetworkIdSchema },
   async ({ network }) =>
-    toolResult(await api("/api/network/select", { network })),
+    toolResult(
+      await api(
+        "/api/network/select",
+        { network },
+        {},
+        "operator-local",
+      ),
+    ),
 );
 
 server.tool(
@@ -105,8 +154,18 @@ server.tool(
     value: z.number().nonnegative().optional(),
   },
   async ({ scenarioId, subjectId, referenceId, value }) => {
-    await api("/api/scenario/select", { scenarioId });
-    const state = await api<PublicState>("/api/state");
+    await api(
+      "/api/scenario/select",
+      { scenarioId },
+      {},
+      "operator-local",
+    );
+    const state = await api<PublicState>(
+      "/api/state",
+      undefined,
+      {},
+      "operator-local",
+    );
     const action: ProposedAction = ProposedActionSchema.parse({
       ...state.defaultAction,
       requestId: randomUUID(),
@@ -114,23 +173,48 @@ server.tool(
       referenceId: referenceId ?? state.defaultAction.referenceId,
       value: value ?? state.defaultAction.value,
     });
-    return toolResult(await api("/api/simulation/run", action));
+    return toolResult(
+      await api(
+        "/api/simulation/run",
+        action,
+        {},
+        "operator-local",
+      ),
+    );
   },
 );
 
 server.tool(
   "execute_action_permit",
   "Consume one fresh ALLOW permit. Reuse, expiry, missing anchor or altered commitments are rejected.",
-  { permitId: z.string().uuid() },
-  async ({ permitId }) =>
-    toolResult(await api("/api/execute", { permitId })),
+  {
+    permitId: z.string().uuid(),
+    idempotencyKey: z.string().uuid().optional(),
+  },
+  async ({ permitId, idempotencyKey }) =>
+    toolResult(
+      await api(
+        "/api/execute",
+        { permitId },
+        { "Idempotency-Key": idempotencyKey ?? randomUUID() },
+        "executor-local",
+      ),
+    ),
 );
 
 server.tool(
   "expire_raw_evidence",
   "Delete evidence encryption keys while preserving signed receipts, commitments and anchors for audit.",
   {},
-  async () => toolResult(await api("/api/lifecycle/expire", {})),
+  async () =>
+    toolResult(
+      await api(
+        "/api/lifecycle/expire",
+        {},
+        {},
+        "operator-local",
+      ),
+    ),
 );
 
 server.tool(
@@ -138,7 +222,14 @@ server.tool(
   "Reset the lab while optionally keeping a selected scenario.",
   { scenarioId: ScenarioIdSchema.optional() },
   async ({ scenarioId }) =>
-    toolResult(await api("/api/reset", { scenarioId })),
+    toolResult(
+      await api(
+        "/api/reset",
+        { scenarioId },
+        {},
+        "operator-local",
+      ),
+    ),
 );
 
 const transport = new StdioServerTransport();

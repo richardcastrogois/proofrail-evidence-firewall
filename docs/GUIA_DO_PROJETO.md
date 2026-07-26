@@ -205,7 +205,13 @@ O health deve mostrar `mode: cli`. No modo local, os três contêineres Midnight
 - **Dia 02 concluído no código:** o conector GitHub App, webhook HMAC, consulta por SHA/digest e identidade Ed25519 foram implementados e cobertos por testes locais.
 - **Dia 02 ainda tem uma pendência externa:** criar e instalar o GitHub App em um repositório de teste e receber um workflow real. Sem isso, o conector existe, mas ainda não possui evidência operacional externa.
 - **Versionamento fechado:** GitLab privado é a fonte principal protegida; GitHub privado é o espelho. Os dois pipelines passaram sobre o mesmo commit.
-- **Próximo trabalho:** Dia 03 — autenticação de serviço, aprovação humana separada, executor restrito e validação na Preview/Testnet.
+- **Dia 03 local concluído:** autenticação por scopes, aprovação humana
+  assinada, executor staging fechado e idempotência persistida foram
+  implementados e validados.
+- **Próximo gate:** concluir a submissão do contrato em Preview. A carteira
+  está financiada, mas o RPC encerrou a conexão durante o registro de DUST. O
+  executor GitHub também permanece desabilitado até receber configuração e
+  token `Actions: write` próprios. A API não deve ser exposta publicamente.
 
 ### Git explicado para quem está começando
 
@@ -288,7 +294,9 @@ Durante a validação, a inicialização detectou `node_modules` instalado pelo 
 
 ### Ainda é demonstração
 
-- o GitHub CI possui conector real opcional; identidade corporativa, scanner, aprovação e execução final ainda são simulados;
+- o GitHub CI possui conector real opcional; aprovação local é criptográfica,
+  mas identidade corporativa e scanner ainda são simulados, e o executor
+  staging depende de credencial operacional externa;
 - chaves privadas ficam em arquivo local;
 - não há login, papéis de usuário nem KMS/HSM;
 - o armazenamento é JSON, não banco transacional;
@@ -303,10 +311,11 @@ Durante a validação, a inicialização detectou `node_modules` instalado pelo 
 
 1. Integrar uma origem externa real e assinada.
 2. Levar verificação de emissores e política privada para o circuito Compact.
-3. Adicionar autenticação, autorização por escopo e aprovação humana para `REVIEW_REQUIRED`.
+3. Substituir tokens locais e aprovador local por identidade corporativa/KMS.
 4. Mover segredos para KMS/HSM e dados para PostgreSQL com migrations.
 5. Tornar coleta, decisão e execução idempotentes e resilientes a falhas.
-6. Integrar um executor real controlado que recuse qualquer chamada sem permit.
+6. Validar o executor controlado contra o workflow staging com credencial
+   mínima e adicionar rollback do destino real.
 7. Criar testes automatizados de API, frontend, MCP, contrato e ponta a ponta.
 8. Implantar e repetir os testes negativos em Preview e Preprod.
 
