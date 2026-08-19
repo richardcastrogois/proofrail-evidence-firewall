@@ -50,7 +50,9 @@ Entregas:
 - guardar segredos fora de `data/store.json` e impedir log de token, seed ou payload sensível;
 - adicionar testes de assinatura inválida, webhook repetido, SHA trocado e artefato substituído.
 
-Estado em 22/07/2026: **implementação concluída e validada localmente; Git e CI privados estão operacionais, mas a validação do conector contra um workflow real ainda depende das credenciais e da instalação do GitHub App**.
+Estado em 22/07/2026: **implementação concluída e validada localmente; Git e
+CI privados estão operacionais.** Em 19/08/2026, o conector também foi validado
+contra workflow e artefato reais durante o fechamento do Dia 03.
 
 Implementado:
 
@@ -67,9 +69,16 @@ Implementado:
 - recibo CI armazenado só é reutilizado depois de reverificar sua assinatura;
 - testes de função e de rota HTTP para ação alterada, HMAC alterado, replay, colisão, digest substituído e recibo adulterado.
 
-Pendente de evidência operacional: criar/instalar o GitHub App, configurar o webhook HTTPS e executar o critério abaixo contra um commit e artefato reais. Isso não é simulado pelos testes.
+Pendente de exposição pública: configurar um endpoint HTTPS para receber o
+webhook diretamente do GitHub, com rate limit e política operacional. A
+validação de commit, workflow e artefato reais foi executada em 19/08/2026 com
+payload real assinado e injetado localmente.
 
-Critério de aceite local atendido: workflow e artefato corretos produzem recibo; outro SHA, check pendente, assinatura incorreta, digest trocado, colisão de delivery e recibo adulterado falham ou exigem nova verificação. A reentrega idêntica é aceita sem duplicar evento. O aceite operacional externo continua pendente até um commit real passar pelo GitHub App instalado.
+Critério de aceite atendido para o recorte local: workflow e artefato corretos
+produzem recibo; outro SHA, check pendente, assinatura incorreta, digest
+trocado, colisão de delivery e recibo adulterado falham ou exigem nova
+verificação. A reentrega idêntica é aceita sem duplicar evento. A entrega
+pública do webhook ainda precisa ser comprovada antes de expor a API.
 
 ### Fechamento antes do Dia 03
 
@@ -88,10 +97,10 @@ Isso encerra a infraestrutura Git necessária para começar o Dia 03. Não encer
 
 Objetivo: provar que o permit controla uma ação real em ambiente não produtivo.
 
-Estado em 19/08/2026: **03.1, 03.2 e 03.3 concluídos e validados
-localmente; 03.4 validado em Preview/Testnet.** O fechamento operacional do
-executor GitHub real ainda depende de credencial `Actions: write` separada e de
-evidência CI real com artifact/run.
+Estado em 19/08/2026: **Dia 03 concluído no recorte planejado.** 03.1, 03.2 e
+03.3 foram validados localmente; 03.4 foi validado em Preview/Testnet; e o
+executor GitHub real foi validado com credencial `Actions: write` separada,
+CI real, artifact/run real, dispatch fechado para staging e replay bloqueado.
 
 Implementado:
 
@@ -118,11 +127,25 @@ insuficiente e contradição com os asserts esperados. O fluxo HTTP autenticado
 também emitiu `ALLOW` com permit vinculado à rede `preview` e ao contrato
 acima.
 
-Limite operacional restante: a API reconhece o GitHub App como configurado,
-mas o executor externo fica sem dispatch real enquanto
-`PROOFRAIL_EXECUTOR_GITHUB_TOKEN` não existir. Um permit de simulação foi
-recusado com `PERMIT_INVALID` por ausência de proveniência CI real, como
-esperado.
+Gate executor: o CI real da branch `codex/day-03-final-validation` passou no
+run `32311156415` para o commit
+`fba27e939f535b2d155412fd2e2f68f1f3a634ec`, gerando o artefato `proofrail-web`
+`9386498611` com digest
+`sha256:8f1f325979e8fd580f1c6b7dc3b5777cae71347e0176b3fcc585d86adc4860c7`.
+O fluxo autenticado emitiu permit Preview
+`2da99087-694f-414d-8efe-7244eed84db9`, ancorado na transação
+`00589341add7d33f266c6e7fd66586c2c3ad963c443b300031a595a011d1f7f6ab`.
+O executor consumiu o permit uma vez, disparou o workflow real
+`staging-deploy.yml` no run `32312003968`, que terminou com `success`, e gerou
+o artefato `proofrail-staging-f4907d8e-dd2f-4f21-babf-b572de97bc4b`
+`9386764596`, digest
+`sha256:476d86f5d3e621afcf9bda96b5c845a21702640e208650788b478e8196aca2ee`.
+Replay do mesmo permit retornou `PERMIT_ALREADY_CONSUMED`.
+
+Limite operacional restante: o webhook usado na validação foi assinado com HMAC
+e injetado localmente com payload de run real. A entrega HTTPS pública
+GitHub -> API, identidade corporativa, scanner real, KMS/HSM, banco
+transacional, rollback e Preprod ficam para o Dia 04 ou posteriores.
 
 Entregas:
 

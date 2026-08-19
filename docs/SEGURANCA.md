@@ -95,11 +95,11 @@ O recibo de CI é assinado pelo adaptador Proofrail **depois** de consultar o Gi
 
 - autenticação por token e scopes existe localmente; identidade forte, rate limit distribuído e proteção operacional continuam ausentes;
 - chaves privadas ainda são arquivos locais; precisam migrar para KMS/HSM antes de produção;
-- somente o CI possui primeiro conector externo; identidade corporativa e scanner ainda são simulações, e o executor GitHub depende de credencial operacional para dispatch real;
+- CI e executor staging já foram validados com GitHub Actions real; identidade corporativa e scanner ainda são simulações;
 - contrato Compact não restringe qual chamador pode registrar uma decisão;
 - circuito recebe do backend commitments e contagens e ainda não prova assinaturas e política completas;
 - estado JSON não garante transação atômica entre múltiplas instâncias;
-- há dispatch fechado para staging, mas ainda não há rollback nem comprovação operacional contra um token `Actions: write`;
+- há dispatch fechado para staging comprovado com token `Actions: write`, mas ainda não há rollback nem destino real de hospedagem;
 - não há rotação/revogação de emissores e administradores.
 
 ### P1 — necessários antes de piloto empresarial
@@ -148,11 +148,11 @@ O contrato atual comprova contagem mínima, zero contradições e replay de `ALL
 
 ## Veredito atual
 
-Os incrementos 03.1–03.3 acrescentam autenticação local, aprovação humana
-assinada, separação de credenciais e execução staging idempotente. Ainda não
-resolvem identidade empresarial, custódia profissional, todos os conectores,
-registrador on-chain, banco distribuído, rollback ou operação do executor com
-credencial real. A carteira Preview, DUST, contrato, escrita positiva e
-negativos on-chain foram validados em 19/08/2026, mas o dispatch real do
-executor staging continua dependente de `PROOFRAIL_EXECUTOR_GITHUB_TOKEN` e
-proveniência CI real. A versão não deve ser exposta como serviço de produção.
+Os incrementos 03.1–03.4 acrescentam autenticação local, aprovação humana
+assinada, separação de credenciais, ancoragem Preview e execução staging
+idempotente com GitHub Actions real. Ainda não resolvem identidade
+empresarial, custódia profissional, todos os conectores, registrador on-chain,
+banco distribuído, rollback, webhook HTTPS público ou destino real de
+hospedagem. A carteira Preview, DUST, contrato, escrita positiva, negativos
+on-chain, CI real, dispatch staging real e replay bloqueado foram validados em
+19/08/2026. A versão não deve ser exposta como serviço de produção.

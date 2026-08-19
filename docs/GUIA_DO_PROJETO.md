@@ -203,19 +203,21 @@ O health deve mostrar `mode: cli`. No modo local, os três contêineres Midnight
 
 - **Dia 01 concluído:** o domínio de agente + deploy, as políticas, os commitments, o permit e os caminhos `DENY`, `REVIEW_REQUIRED`, `ALLOW` e replay foram implementados e validados localmente.
 - **Dia 02 concluído no código:** o conector GitHub App, webhook HMAC, consulta por SHA/digest e identidade Ed25519 foram implementados e cobertos por testes locais.
-- **Dia 02 ainda tem uma pendência externa:** criar e instalar o GitHub App em um repositório de teste e receber um workflow real. Sem isso, o conector existe, mas ainda não possui evidência operacional externa.
+- **Dia 02 tem uma pendência de exposição pública:** workflow e artefato reais
+  já foram validados; falta receber o webhook por endpoint HTTPS público com
+  rate limit e política operacional fora do localhost.
 - **Versionamento fechado:** GitLab privado é a fonte principal protegida; GitHub privado é o espelho. Os dois pipelines passaram sobre o mesmo commit.
-- **Dia 03 local concluído:** autenticação por scopes, aprovação humana
-  assinada, executor staging fechado e idempotência persistida foram
-  implementados e validados.
+- **Dia 03 concluído no recorte planejado:** autenticação por scopes,
+  aprovação humana assinada, executor staging fechado e idempotência persistida
+  foram implementados e validados.
 - **Preview/Testnet validada em 19/08/2026:** carteira financiada, DUST
   positivo, contrato encontrado no indexer público, escrita `ALLOW` real,
   negativos on-chain de replay/evidência/contradição e fluxo HTTP autenticado
   com permit em `preview`.
-- **Executor GitHub operacional ainda pendente:** o GitHub App de leitura está
-  configurado, mas o dispatch real de staging exige
-  `PROOFRAIL_EXECUTOR_GITHUB_TOKEN` com `Actions: write` separado. A API não
-  deve ser exposta publicamente.
+- **Executor GitHub validado:** CI real passou no run `32311156415`, o permit
+  Preview foi ancorado e consumido uma única vez, o workflow real de staging
+  passou no run `32312003968` e replay retornou `PERMIT_ALREADY_CONSUMED`. A
+  API ainda não deve ser exposta publicamente.
 
 ### Git explicado para quem está começando
 
@@ -298,9 +300,9 @@ Durante a validação, a inicialização detectou `node_modules` instalado pelo 
 
 ### Ainda é demonstração
 
-- o GitHub CI possui conector real opcional; aprovação local é criptográfica,
-  mas identidade corporativa e scanner ainda são simulados, e o executor
-  staging depende de credencial operacional externa;
+- o GitHub CI e o executor staging já foram validados com GitHub Actions real;
+  aprovação local é criptográfica, mas identidade corporativa e scanner ainda
+  são simulados;
 - chaves privadas ficam em arquivo local;
 - não há login, papéis de usuário nem KMS/HSM;
 - o armazenamento é JSON, não banco transacional;
@@ -309,7 +311,8 @@ Durante a validação, a inicialização detectou `node_modules` instalado pelo 
 - o circuito valida contagens, contradições e replay de `ALLOW`, porém ainda recebe do backend o resumo da decisão;
 - não existe ainda uma prova Compact completa de cada assinatura, frescor e regra privada;
 - Testnet e Preprod exigem carteira financiada pelo faucet e implantação separada.
-- o GitHub App ainda precisa ser criado/instalado para que o recibo de CI seja validado contra um workflow externo real.
+- o webhook HTTPS público GitHub -> API ainda precisa ser validado antes de
+  exposição fora do localhost.
 
 ## Próximas melhorias recomendadas
 
@@ -318,8 +321,7 @@ Durante a validação, a inicialização detectou `node_modules` instalado pelo 
 3. Substituir tokens locais e aprovador local por identidade corporativa/KMS.
 4. Mover segredos para KMS/HSM e dados para PostgreSQL com migrations.
 5. Tornar coleta, decisão e execução idempotentes e resilientes a falhas.
-6. Validar o executor controlado contra o workflow staging com credencial
-   mínima e adicionar rollback do destino real.
+6. Adicionar rollback do destino real e validação pública do webhook HTTPS.
 7. Criar testes automatizados de API, frontend, MCP, contrato e ponta a ponta.
 8. Implantar e repetir os testes negativos em Preview e Preprod.
 

@@ -35,15 +35,16 @@ Implementado e testado:
 - permit assinado e vinculado à política, decisão, rede, contrato e âncora;
 - execução única e bloqueio de replay;
 - contrato Compact e CLI para Local, Preview/Testnet e Preprod;
-- fluxo `DENY -> REVIEW_REQUIRED -> ALLOW -> executar -> bloquear replay` validado localmente.
+- fluxo `DENY -> REVIEW_REQUIRED -> ALLOW -> executar -> bloquear replay` validado localmente;
 - GitHub App com webhook HMAC, delivery ID idempotente e consulta do workflow pelo SHA exato;
 - validação do digest do artefato no mesmo workflow run e recibo real de `Pipeline CI`;
-- identidade Ed25519 do agente vinculada à ação e chaves privadas separadas de `data/store.json`.
+- identidade Ed25519 do agente vinculada à ação e chaves privadas separadas de `data/store.json`;
+- executor staging validado com GitHub Actions real, permit Preview de uso único e replay bloqueado.
 
 Ainda é laboratório ou exige configuração externa:
 
-- o conector de CI está implementado, mas só se torna real após configurar e instalar o GitHub App; os botões manuais continuam sendo simulações didáticas;
-- as respostas de identidade corporativa, scanner, aprovação e a execução final ainda são simuladas;
+- o conector CI e o executor staging já foram validados com GitHub Actions real; os botões manuais continuam sendo simulações didáticas;
+- as respostas de identidade corporativa, scanner e destino final de hospedagem ainda são simuladas ou locais;
 - a API não possui autenticação empresarial, RBAC, rate limit distribuído ou banco transacional;
 - chaves privadas locais ficam em `data/private`, fora do store e do Git, mas ainda não em KMS/HSM;
 - o contrato ainda confia no backend para preparar a decisão e não restringe o registrador on-chain;

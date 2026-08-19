@@ -19,7 +19,7 @@ Isso não significa que a visão de produção esteja completa. O GitHub CI já 
 | Preview/Testnet | implantada e validada com escrita e negativos on-chain |
 | Preprod | configurada; implantação depende de faucet/saldo |
 | Fontes empresariais reais | GitHub CI implementado; demais fontes ainda não integradas |
-| Execução empresarial real | ainda simulada |
+| Execução empresarial real | executor staging validado com GitHub Actions; destino real e rollback pendentes |
 
 O endereço atual de cada contrato não deve ser copiado para a documentação, porque muda a cada implantação. A fonte correta é:
 
@@ -170,7 +170,13 @@ A visão completa só deve ser chamada de pronta quando:
 
 O Proofrail demonstra bem a tese: autodeclaração não basta, evidência isolada pode não bastar, contradição bloqueia, provas compatíveis liberam uma ação e os dados brutos podem perder a chave sem apagar a auditabilidade.
 
-O ponto mais forte é a separação entre evidência, decisão, autorização e execução. O maior risco ainda é a concentração de confiança no backend e nas origens que permanecem simuladas. O próximo passo é validar o conector GitHub contra um repositório real, adicionar identidade/scanner/aprovação independentes e fazer o circuito verificar a parte crítica da política.
+O ponto mais forte é a separação entre evidência, decisão, autorização e
+execução. O GitHub CI e o executor staging já foram validados contra workflow e
+artefatos reais em 19/08/2026. O maior risco ainda é a concentração de
+confiança no backend, nas origens que permanecem simuladas e na ausência de
+registrador autorizado on-chain. O próximo passo é adicionar
+identidade/scanner independentes, webhook HTTPS público controlado e fazer o
+circuito verificar a parte crítica da política.
 
 Referências oficiais verificadas em 19/07/2026:
 

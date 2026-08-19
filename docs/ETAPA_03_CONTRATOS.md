@@ -18,9 +18,22 @@ Em 19/08/2026, o gate Preview/Testnet também foi validado: carteira com
 `e9ed0dbb07103d43eaae6de797da1edd178689a3026b169d9d1d673d72465e06`,
 escrita `ALLOW` real na transação
 `00d85149f3621fb277f178b7f8d1288d838e9e5d7a7d7c74f7653c908adf605599`
-e negativos on-chain de replay, evidência insuficiente e contradição. O
-dispatch real do executor GitHub segue pendente de
-`PROOFRAIL_EXECUTOR_GITHUB_TOKEN`.
+e negativos on-chain de replay, evidência insuficiente e contradição.
+
+O fechamento operacional do executor também foi validado em 19/08/2026 com
+credencial separada `Actions: write`: o CI real passou no run
+`32311156415`, artefato `proofrail-web` `9386498611`, digest
+`sha256:8f1f325979e8fd580f1c6b7dc3b5777cae71347e0176b3fcc585d86adc4860c7`;
+o fluxo autenticado emitiu permit `2da99087-694f-414d-8efe-7244eed84db9`,
+ancorou `ALLOW` em Preview na transação
+`00589341add7d33f266c6e7fd66586c2c3ad963c443b300031a595a011d1f7f6ab`;
+o executor consumiu o permit uma vez e disparou o workflow real de staging
+`32312003968`, que terminou com `success` e gerou o artefato
+`proofrail-staging-f4907d8e-dd2f-4f21-babf-b572de97bc4b` `9386764596`.
+Uma segunda tentativa de execução do mesmo permit retornou
+`PERMIT_ALREADY_CONSUMED`. O webhook usado nessa validação foi assinado com
+HMAC e injetado localmente com payload de run real; entrega HTTPS pública
+GitHub -> API continua fora deste recorte local.
 
 ## Atores e separação de deveres
 
@@ -164,4 +177,9 @@ O schema não aceita campos extras. Mensagens não devem incluir credenciais, pa
 - fluxo HTTP autenticado em `MIDNIGHT_MODE=cli` emitiu `ALLOW` e permit em
   `preview`;
 - execução de permit de simulação foi recusada com `PERMIT_INVALID` por falta
-  de proveniência GitHub CI real.
+  de proveniência GitHub CI real;
+- CI real da branch `codex/day-03-final-validation` passou no GitHub Actions
+  run `32311156415` para o commit
+  `fba27e939f535b2d155412fd2e2f68f1f3a634ec`;
+- o executor real consumiu o permit Preview uma única vez, disparou o staging
+  run `32312003968` e bloqueou replay com `PERMIT_ALREADY_CONSUMED`.

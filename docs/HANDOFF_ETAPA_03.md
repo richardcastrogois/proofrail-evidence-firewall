@@ -34,20 +34,20 @@ O agente pode solicitar um deploy, mas não pode aprovar a si mesmo, trocar comm
 
 ### Etapa 03
 
-- Incrementos 03.1, 03.2 e 03.3 estão implementados em `main`.
+- Incrementos 03.1, 03.2 e 03.3 estão implementados.
 - Autenticação, scopes, aprovação assinada, executor staging, idempotência e
   migração do store para v6 passaram em `npm test`, `npm run typecheck` e
   `npm run build`.
 - O workflow fechado está em `.github/workflows/staging-deploy.yml`; sua
   credencial `Actions: write` é separada do GitHub App `Actions: read`.
 - O executor fica desabilitado sem `data/private/executor.json` e
-  `PROOFRAIL_EXECUTOR_GITHUB_TOKEN`.
+  `PROOFRAIL_EXECUTOR_GITHUB_TOKEN`; com ambos configurados, o dispatch real de
+  staging foi validado.
 - O Incremento 03.4 foi validado em Preview/Testnet: carteira financiada,
   DUST positivo, contrato encontrado no indexer público, escrita `ALLOW` real
   e negativos on-chain de replay, evidência insuficiente e contradição.
-- O executor GitHub real ainda não teve dispatch operacional porque falta
-  `PROOFRAIL_EXECUTOR_GITHUB_TOKEN`; a configuração local não secreta foi
-  preparada em `data/private/executor.json`.
+- O executor GitHub real consumiu um permit Preview uma única vez, disparou
+  `staging-deploy.yml` e bloqueou replay com `PERMIT_ALREADY_CONSUMED`.
 
 ### Git e repositórios
 
@@ -124,6 +124,29 @@ também retornou `ALLOW`, permit presente, `permitNetwork=preview` e o mesmo
 contrato. A tentativa de executar esse permit de simulação falhou com
 `PERMIT_INVALID`, porque ele não possuía proveniência GitHub CI real.
 
+### Executor GitHub real
+
+Evidência executada em 19/08/2026:
+
+```text
+branch de validação          -> codex/day-03-final-validation
+commit validado              -> fba27e939f535b2d155412fd2e2f68f1f3a634ec
+CI real                      -> run 32311156415, conclusion success
+artefato CI                  -> proofrail-web, id 9386498611
+digest CI                    -> sha256:8f1f325979e8fd580f1c6b7dc3b5777cae71347e0176b3fcc585d86adc4860c7
+permit Preview               -> 2da99087-694f-414d-8efe-7244eed84db9
+anchor Preview               -> tx 00589341add7d33f266c6e7fd66586c2c3ad963c443b300031a595a011d1f7f6ab
+execução                     -> HTTP 201, status succeeded
+workflow staging             -> run 32312003968, conclusion success
+artefato staging             -> proofrail-staging-f4907d8e-dd2f-4f21-babf-b572de97bc4b, id 9386764596
+digest staging               -> sha256:476d86f5d3e621afcf9bda96b5c845a21702640e208650788b478e8196aca2ee
+replay do permit             -> HTTP 409, PERMIT_ALREADY_CONSUMED
+```
+
+O webhook usado nessa validação foi assinado com HMAC e injetado localmente com
+payload de run real. Isso valida parsing, assinatura, idempotência, consulta do
+run e artefato real; não comprova entrega HTTPS pública GitHub -> API.
+
 Use somente os scripts do projeto e nunca exponha seed ou mnemonic:
 
 ```powershell
@@ -164,7 +187,10 @@ Preprod pertence ao Dia 04. Não pule diretamente para ela.
 - chaves privadas removidas de `data/store.json`;
 - testes positivos e negativos do conector.
 
-Pendência externa do Dia 02: o GitHub App ainda precisa ser criado/instalado, receber um webhook HTTPS real e validar um workflow/artefato reais. Os testes provam o adaptador, mas não substituem essa evidência operacional.
+Pendência externa do Dia 02: o webhook HTTPS público GitHub -> API ainda não
+foi exposto. O workflow/artefato reais foram validados com payload real e HMAC
+local; uma validação pública ainda exige endpoint HTTPS, rate limit e política
+operacional de exposição.
 
 ## Escopo exato da Etapa 03
 
