@@ -13,6 +13,15 @@ executor externo permanece desabilitado quando sua configuração ou credencial
 separada não existe. A API continua limitada a `127.0.0.1`; este recorte não
 inclui rate limit distribuído nem IAM corporativo.
 
+Em 19/08/2026, o gate Preview/Testnet também foi validado: carteira com
+`5.000.000.000 tNight`, DUST positivo, contrato Preview
+`e9ed0dbb07103d43eaae6de797da1edd178689a3026b169d9d1d673d72465e06`,
+escrita `ALLOW` real na transação
+`00d85149f3621fb277f178b7f8d1288d838e9e5d7a7d7c74f7653c908adf605599`
+e negativos on-chain de replay, evidência insuficiente e contradição. O
+dispatch real do executor GitHub segue pendente de
+`PROOFRAIL_EXECUTOR_GITHUB_TOKEN`.
+
 ## Atores e separação de deveres
 
 | Ator | Responsabilidade | Autoridade que não possui |
@@ -140,12 +149,19 @@ Os endpoints novos usam envelope estável:
 
 O schema não aceita campos extras. Mensagens não devem incluir credenciais, payload bruto, stack trace, assinatura, PEM ou resposta integral de provedor. As rotas antigas conservam temporariamente `{ "error": "..." }` para não introduzir quebra fora do recorte; a migração deve ser explícita.
 
-## Evidência de validação em 23/07/2026
+## Evidência de validação em 19/08/2026
 
 - contratos compilam em API, web, MCP, core e shared;
 - testes negativos cobrem autenticação, aprovação, allowlists, replay e corrida;
 - duas chamadas concorrentes com a mesma chave causam um único dispatch;
 - store v3/v4/v5 migra para v6 com backup e sem chaves privadas;
-- `npm test`, `npm run typecheck` e `npm run build` passam no Windows;
-- o deploy Midnight Preview ainda não concluiu: a carteira está financiada,
-  mas o RPC fechou a conexão durante o registro de DUST em três tentativas.
+- `npm audit --omit=dev --audit-level=high`, `npm test`,
+  `npm run typecheck` e `npm run build` passam no WSL com Node 22;
+- `npm run check-balance -- --network preview` confirma saldo e DUST;
+- `npm run test:e2e -- --network preview` confirma o contrato no indexer;
+- `npm run cli -- anchor ... ALLOW` registrou escrita real em Preview;
+- replay, evidência insuficiente e contradição falham com asserts do circuito;
+- fluxo HTTP autenticado em `MIDNIGHT_MODE=cli` emitiu `ALLOW` e permit em
+  `preview`;
+- execução de permit de simulação foi recusada com `PERMIT_INVALID` por falta
+  de proveniência GitHub CI real.

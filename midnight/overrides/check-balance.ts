@@ -13,7 +13,8 @@ const { network, config: networkConfig } = resolveNetwork();
 const SEED = getOrCreateSeed(network);
 
 const MAX_SYNC_ATTEMPTS = Number(process.env.MIDNIGHT_BALANCE_SYNC_ATTEMPTS ?? '3');
-const SYNC_TIMEOUT_MS = Number(process.env.MIDNIGHT_BALANCE_SYNC_TIMEOUT_MS ?? '120000');
+const DEFAULT_SYNC_TIMEOUT_MS = network === 'undeployed' ? 120_000 : 600_000;
+const SYNC_TIMEOUT_MS = Number(process.env.MIDNIGHT_BALANCE_SYNC_TIMEOUT_MS ?? String(DEFAULT_SYNC_TIMEOUT_MS));
 
 async function stopWallet(ctx: WalletContext | undefined): Promise<void> {
   if (!ctx) return;

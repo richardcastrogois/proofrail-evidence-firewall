@@ -199,7 +199,7 @@ O health deve mostrar `mode: cli`. No modo local, os três contêineres Midnight
 
 ## Em que pé o projeto está
 
-### Resumo de 22/07/2026
+### Resumo atualizado em 19/08/2026
 
 - **Dia 01 concluído:** o domínio de agente + deploy, as políticas, os commitments, o permit e os caminhos `DENY`, `REVIEW_REQUIRED`, `ALLOW` e replay foram implementados e validados localmente.
 - **Dia 02 concluído no código:** o conector GitHub App, webhook HMAC, consulta por SHA/digest e identidade Ed25519 foram implementados e cobertos por testes locais.
@@ -208,10 +208,14 @@ O health deve mostrar `mode: cli`. No modo local, os três contêineres Midnight
 - **Dia 03 local concluído:** autenticação por scopes, aprovação humana
   assinada, executor staging fechado e idempotência persistida foram
   implementados e validados.
-- **Próximo gate:** concluir a submissão do contrato em Preview. A carteira
-  está financiada, mas o RPC encerrou a conexão durante o registro de DUST. O
-  executor GitHub também permanece desabilitado até receber configuração e
-  token `Actions: write` próprios. A API não deve ser exposta publicamente.
+- **Preview/Testnet validada em 19/08/2026:** carteira financiada, DUST
+  positivo, contrato encontrado no indexer público, escrita `ALLOW` real,
+  negativos on-chain de replay/evidência/contradição e fluxo HTTP autenticado
+  com permit em `preview`.
+- **Executor GitHub operacional ainda pendente:** o GitHub App de leitura está
+  configurado, mas o dispatch real de staging exige
+  `PROOFRAIL_EXECUTOR_GITHUB_TOKEN` com `Actions: write` separado. A API não
+  deve ser exposta publicamente.
 
 ### Git explicado para quem está começando
 

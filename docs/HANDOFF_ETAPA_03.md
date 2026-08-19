@@ -30,12 +30,11 @@ agente solicita
 
 O agente pode solicitar um deploy, mas não pode aprovar a si mesmo, trocar commit, artefato, serviço ou ambiente, nem enviar um comando arbitrário para execução.
 
-## Estado confirmado em 23/07/2026
+## Estado confirmado em 19/08/2026
 
 ### Etapa 03
 
-- Incrementos 03.1, 03.2 e 03.3 estão implementados na branch
-  `codex/day-03-contracts-threat-model`.
+- Incrementos 03.1, 03.2 e 03.3 estão implementados em `main`.
 - Autenticação, scopes, aprovação assinada, executor staging, idempotência e
   migração do store para v6 passaram em `npm test`, `npm run typecheck` e
   `npm run build`.
@@ -43,9 +42,12 @@ O agente pode solicitar um deploy, mas não pode aprovar a si mesmo, trocar comm
   credencial `Actions: write` é separada do GitHub App `Actions: read`.
 - O executor fica desabilitado sem `data/private/executor.json` e
   `PROOFRAIL_EXECUTOR_GITHUB_TOKEN`.
-- O Incremento 03.4 não concluiu. A carteira Preview está financiada, mas três
-  submissões encerraram durante o registro de DUST por fechamento do RPC.
-- Não houve deployment Preview e nenhum teste e2e Preview deve ser alegado.
+- O Incremento 03.4 foi validado em Preview/Testnet: carteira financiada,
+  DUST positivo, contrato encontrado no indexer público, escrita `ALLOW` real
+  e negativos on-chain de replay, evidência insuficiente e contradição.
+- O executor GitHub real ainda não teve dispatch operacional porque falta
+  `PROOFRAIL_EXECUTOR_GITHUB_TOKEN`; a configuração local não secreta foi
+  preparada em `data/private/executor.json`.
 
 ### Git e repositórios
 
@@ -97,11 +99,30 @@ O fluxo local já comprovou `DENY`, `REVIEW_REQUIRED`, `ALLOW`, ancoragem, consu
 
 ### Preview/Testnet
 
-O saldo foi revalidado em 23/07/2026: a carteira possui `5.000.000.000 tNight`
-e ainda não gerou DUST. O proof server local ficou saudável. Três tentativas
-com Node 24 e Node 22.13.1 falharam em `submitAndWatchExtrinsic` porque
-`wss://rpc.preview.midnight.network/` fechou com code `1000` durante o registro
-do UTXO. O estado continua sem deployment Preview.
+O saldo foi revalidado em 19/08/2026: a carteira possui `5.000.000.000 tNight`
+e `25.000.000.000.000.000.000` DUST. O proof server local respondeu
+`status: ok`. O contrato Preview atual é:
+
+```text
+e9ed0dbb07103d43eaae6de797da1edd178689a3026b169d9d1d673d72465e06
+```
+
+Evidências executadas em 19/08/2026:
+
+```text
+npm run test:e2e -- --network preview -> passou
+npm run cli -- read                 -> network preview, nextId 1 antes da escrita
+npm run cli -- anchor ... ALLOW     -> tx 00d85149f3621fb277f178b7f8d1288d838e9e5d7a7d7c74f7653c908adf605599, bloco 490247
+replay do mesmo ALLOW               -> failed assert: ALLOW action already anchored
+ALLOW com 4/5 evidências             -> failed assert: insufficient evidence
+ALLOW com contradição                -> failed assert: contradictions block ALLOW
+npm run cli -- read                 -> nextId 2
+```
+
+O fluxo HTTP autenticado em `MIDNIGHT_MODE=cli`, com `DATA_DIR` temporário,
+também retornou `ALLOW`, permit presente, `permitNetwork=preview` e o mesmo
+contrato. A tentativa de executar esse permit de simulação falhou com
+`PERMIT_INVALID`, porque ele não possuía proveniência GitHub CI real.
 
 Use somente os scripts do projeto e nunca exponha seed ou mnemonic:
 
@@ -215,7 +236,7 @@ Não adicionar login visual ou provedor corporativo ainda sem uma decisão expl�
 
 O executor inicialmente pode acionar um workflow de staging predefinido. Não deve receber nome de script, argumentos arbitrários ou URL de destino fornecidos pelo agente.
 
-### Incremento 03.4 — Preview/Testnet — bloqueado no RPC
+### Incremento 03.4 — Preview/Testnet — validado
 
 - revalidar carteira, tNIGHT e DUST;
 - implantar contrato próprio da Preview;

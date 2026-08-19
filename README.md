@@ -47,7 +47,7 @@ Ainda é laboratório ou exige configuração externa:
 - a API não possui autenticação empresarial, RBAC, rate limit distribuído ou banco transacional;
 - chaves privadas locais ficam em `data/private`, fora do store e do Git, mas ainda não em KMS/HSM;
 - o contrato ainda confia no backend para preparar a decisão e não restringe o registrador on-chain;
-- Preview e Preprod dependem de carteira financiada e implantação própria em cada rede.
+- Preview/Testnet já possui carteira financiada e contrato validado; Preprod ainda exige carteira financiada e implantação própria.
 
 Portanto, a versão atual demonstra e testa as garantias; **não deve receber credenciais de produção nem executar deploy real**.
 

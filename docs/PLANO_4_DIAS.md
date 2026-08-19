@@ -88,8 +88,10 @@ Isso encerra a infraestrutura Git necessária para começar o Dia 03. Não encer
 
 Objetivo: provar que o permit controla uma ação real em ambiente não produtivo.
 
-Estado em 23/07/2026: **03.1, 03.2 e 03.3 concluídos e validados
-localmente; 03.4 bloqueado na submissão Preview**.
+Estado em 19/08/2026: **03.1, 03.2 e 03.3 concluídos e validados
+localmente; 03.4 validado em Preview/Testnet.** O fechamento operacional do
+executor GitHub real ainda depende de credencial `Actions: write` separada e de
+evidência CI real com artifact/run.
 
 Implementado:
 
@@ -105,12 +107,22 @@ Implementado:
   digest e cria deployment no environment `staging`;
 - suíte integrada verde: testes, typecheck e build.
 
-Gate Preview: a carteira sincronizou com `5.000.000.000 tNight`, o proof server
-local ficou saudável, mas três tentativas de registro do UTXO para geração de
-DUST falharam porque `wss://rpc.preview.midnight.network/` fechou com código
-`1000` durante `submitAndWatchExtrinsic`. O scaffold oficial atual 0.4.4 usa os
-mesmos endpoints e versões centrais do projeto. Nenhum endereço Preview foi
-gravado no estado; não houve teste on-chain positivo.
+Gate Preview: a carteira sincronizou com `5.000.000.000 tNight` e
+`25.000.000.000.000.000.000` DUST, o proof server local respondeu saudável, o
+contrato Preview `e9ed0dbb07103d43eaae6de797da1edd178689a3026b169d9d1d673d72465e06`
+foi encontrado no indexer público, e uma âncora `ALLOW` foi registrada na
+transação
+`00d85149f3621fb277f178b7f8d1288d838e9e5d7a7d7c74f7653c908adf605599`
+no bloco `490247`. A matriz negativa on-chain bloqueou replay, evidência
+insuficiente e contradição com os asserts esperados. O fluxo HTTP autenticado
+também emitiu `ALLOW` com permit vinculado à rede `preview` e ao contrato
+acima.
+
+Limite operacional restante: a API reconhece o GitHub App como configurado,
+mas o executor externo fica sem dispatch real enquanto
+`PROOFRAIL_EXECUTOR_GITHUB_TOKEN` não existir. Um permit de simulação foi
+recusado com `PERMIT_INVALID` por ausência de proveniência CI real, como
+esperado.
 
 Entregas:
 
