@@ -66,6 +66,7 @@ Abra <http://localhost:5173> e mantenha o terminal aberto para acompanhar `[API]
 ## Documentação
 
 - [Índice completo da documentação](docs/README.md)
+- [Pitch, estado atual e teste local](docs/PITCH_E_TESTE_LOCAL.md)
 - [Entender, apresentar e testar o produto](docs/GUIA_DO_PROJETO.md)
 - [Plano de quatro dias e estado dos Dias 01 e 02](docs/PLANO_4_DIAS.md)
 - [Fluxo privado GitLab principal + GitHub espelho](docs/REPOSITORIO_PRIVADO_GRATUITO.md)
