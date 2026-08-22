@@ -16,10 +16,10 @@ Isso não significa que a visão de produção esteja completa. O GitHub CI já 
 | Permit | assinado, vinculado, temporário, ancorado e de uso único |
 | Compact | compila e registra decisões na devnet local |
 | Devnet local | node, indexer e proof server em Docker |
-| Preview/Testnet | configurada; implantação depende de faucet/saldo |
-| Preprod | configurada; implantação depende de faucet/saldo |
+| Preview/Testnet | implantada e validada com escrita e negativos on-chain |
+| Preprod | implantada e validada com E2E e matriz negativa 10/10 |
 | Fontes empresariais reais | GitHub CI implementado; demais fontes ainda não integradas |
-| Execução empresarial real | ainda simulada |
+| Execução empresarial real | executor staging validado com GitHub Actions; destino real e rollback pendentes |
 
 O endereço atual de cada contrato não deve ser copiado para a documentação, porque muda a cada implantação. A fonte correta é:
 
@@ -87,7 +87,11 @@ Witnesses são dados off-chain e não devem ser tratados como confiáveis sem as
 
 ### Risco P0 do contrato atual
 
-O circuito ainda não restringe qual identidade pode chamar `registerDecision`. Isso significa que uma implantação pública não deve ser tratada como pronta enquanto o contrato não verificar um registrador autorizado. A referência oficial Bulletin Board demonstra o padrão de owner commitment + witness privado; a adaptação ao Proofrail precisa ser compilada, testada contra chamador indevido e implantada separadamente em cada rede.
+O circuito restringe `registerDecision` por commitment público e witness privado
+do registrador. A implementação também suporta rotação, revogação e recuperação,
+e foi compilada e testada contra chamador indevido separadamente em Local,
+Preview e Preprod. O segredo ainda precisa migrar do arquivo local para KMS/HSM
+antes de produção.
 
 ## Local, Preview/Testnet e Preprod
 
@@ -97,9 +101,9 @@ O circuito ainda não restringe qual identidade pode chamar `registerDecision`. 
 | Testnet | `preview` | rede pública + proof server configurado | demonstração pública e integração |
 | Preprod | `preprod` | rede pública + proof server configurado | ensaio antes de produção |
 
-### Snapshot oficial verificado em 23/07/2026
+### Snapshot oficial verificado em 19/08/2026
 
-A [matriz de compatibilidade](https://docs.midnight.network/relnotes/support-matrix) da versão estável Ledger 8 informa, para Preview: node `1.0.1`, Compact devtools `0.5.1`, compiler `0.31.1`, Compact runtime `0.16.0`, Compact JS `2.5.1`, Midnight.js `4.1.1`, Wallet SDK `1.2.0`, indexer `4.3.3` e proof server `8.1.0`. A [tabela oficial de ambientes e endpoints](https://docs.midnight.network/relnotes/network) mantém Preview para desenvolvimento inicial, com:
+A [matriz de compatibilidade](https://docs.midnight.network/relnotes/support-matrix), atualizada em 18/08/2026, informa para Preview: node `1.0.1`, Compact devtools `0.5.1`, compiler `0.31.1`, Compact runtime `0.16.0`, Compact JS `2.5.1`, Midnight.js `4.1.1`, Wallet SDK `1.2.0`, indexer `4.3.5` e proof server `8.1.0`. A [tabela oficial de ambientes e endpoints](https://docs.midnight.network/relnotes/network), também atualizada em 18/08/2026, mantém Preview para desenvolvimento inicial, com:
 
 - RPC `https://rpc.preview.midnight.network`;
 - indexer `https://indexer.preview.midnight.network/api/v4/graphql`;
@@ -114,21 +118,18 @@ Não há justificativa para migrar para canary ou Wallet SDK 2 beta para contorn
 uma indisponibilidade sem diagnóstico oficial.
 
 O estado local contém uma carteira Preview financiada com `5.000.000.000
-tNight`, mas nenhuma implantação Preview ou Preprod. Em 23/07/2026, o saldo
-sincronizou e o proof server local ficou saudável. Três tentativas de deploy
-(Node 24 e Node 22.13.1) falharam antes do contrato, durante o registro do UTXO
-para geração de DUST: o RPC Preview encerrou `submitAndWatchExtrinsic` com
-WebSocket code `1000`. A submissão não gravou deployment Preview no estado.
+tNight`, `25.000.000.000.000.000.000` DUST e implantação Preview persistida.
+Em 19/08/2026, o contrato
+`e9ed0dbb07103d43eaae6de797da1edd178689a3026b169d9d1d673d72465e06`
+foi confirmado pelo indexer público. Uma escrita `ALLOW` real gerou a transação
+`00d85149f3621fb277f178b7f8d1288d838e9e5d7a7d7c74f7653c908adf605599`
+no bloco `490247`. Repetir o mesmo `ALLOW` falhou com `ALLOW action already
+anchored`; `ALLOW` com 4/5 evidências falhou com `insufficient evidence`; e
+`ALLOW` com contradição falhou com `contradictions block ALLOW`.
 
-Próxima retomada segura:
-
-1. confirmar no status/Discord oficial da Midnight se a submissão Preview está
-   operacional;
-2. executar `npm run check-balance -- --network preview`;
-3. repetir `npm run deploy -- --network preview` com Node 22 e proof server
-   local;
-4. somente após endereço persistido, executar `npm run test:e2e`;
-5. não instalar versões canary/beta como tentativa cega.
+Observação operacional: a sincronização Preview levou mais de 120 s em
+19/08/2026. O verificador de saldo usa agora timeout padrão maior para redes
+públicas, preservando `MIDNIGHT_BALANCE_SYNC_TIMEOUT_MS` para override manual.
 
 Cada rede tem sua própria carteira e contrato no arquivo `.midnight-state.json`. Para preparar:
 
@@ -156,7 +157,7 @@ A visão completa só deve ser chamada de pronta quando:
 - segredos estiverem em KMS/HSM;
 - API tiver identidade, escopo, rate limit e trilha imutável;
 - persistência transacional e idempotência distribuída estiverem implementadas;
-- o fluxo completo passar em Preview e depois Preprod.
+- as matrizes Preview e Preprod continuarem no gate de regressão a cada nova implantação.
 
 ## Ordem recomendada
 
@@ -167,13 +168,19 @@ A visão completa só deve ser chamada de pronta quando:
 5. Criar testes de contrato para falsificação, expiração, contradição e replay.
 6. Colocar o permit como requisito técnico de um executor real controlado.
 7. Adicionar KMS/HSM, PostgreSQL, autenticação e observabilidade.
-8. Implantar em Preview, executar testes negativos e repetir em Preprod.
+8. Manter E2E e matriz negativa obrigatórios em novas implantações Preview e Preprod.
 
 ## Diagnóstico honesto
 
 O Proofrail demonstra bem a tese: autodeclaração não basta, evidência isolada pode não bastar, contradição bloqueia, provas compatíveis liberam uma ação e os dados brutos podem perder a chave sem apagar a auditabilidade.
 
-O ponto mais forte é a separação entre evidência, decisão, autorização e execução. O maior risco ainda é a concentração de confiança no backend e nas origens que permanecem simuladas. O próximo passo é validar o conector GitHub contra um repositório real, adicionar identidade/scanner/aprovação independentes e fazer o circuito verificar a parte crítica da política.
+O ponto mais forte é a separação entre evidência, decisão, autorização e
+execução. O GitHub CI e o executor staging já foram validados contra workflow e
+artefatos reais em 19/08/2026. O maior risco ainda é a concentração de
+confiança no backend e nas origens que permanecem simuladas. O registrador
+autorizado on-chain e as matrizes públicas já foram validados. O próximo passo é adicionar
+identidade/scanner independentes, webhook HTTPS público controlado e fazer o
+circuito verificar a parte crítica da política.
 
 Referências oficiais verificadas em 19/07/2026:
 

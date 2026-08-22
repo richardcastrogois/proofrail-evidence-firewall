@@ -30,22 +30,24 @@ agente solicita
 
 O agente pode solicitar um deploy, mas não pode aprovar a si mesmo, trocar commit, artefato, serviço ou ambiente, nem enviar um comando arbitrário para execução.
 
-## Estado confirmado em 23/07/2026
+## Estado confirmado em 19/08/2026
 
 ### Etapa 03
 
-- Incrementos 03.1, 03.2 e 03.3 estão implementados na branch
-  `codex/day-03-contracts-threat-model`.
+- Incrementos 03.1, 03.2 e 03.3 estão implementados.
 - Autenticação, scopes, aprovação assinada, executor staging, idempotência e
   migração do store para v6 passaram em `npm test`, `npm run typecheck` e
   `npm run build`.
 - O workflow fechado está em `.github/workflows/staging-deploy.yml`; sua
   credencial `Actions: write` é separada do GitHub App `Actions: read`.
 - O executor fica desabilitado sem `data/private/executor.json` e
-  `PROOFRAIL_EXECUTOR_GITHUB_TOKEN`.
-- O Incremento 03.4 não concluiu. A carteira Preview está financiada, mas três
-  submissões encerraram durante o registro de DUST por fechamento do RPC.
-- Não houve deployment Preview e nenhum teste e2e Preview deve ser alegado.
+  `PROOFRAIL_EXECUTOR_GITHUB_TOKEN`; com ambos configurados, o dispatch real de
+  staging foi validado.
+- O Incremento 03.4 foi validado em Preview/Testnet: carteira financiada,
+  DUST positivo, contrato encontrado no indexer público, escrita `ALLOW` real
+  e negativos on-chain de replay, evidência insuficiente e contradição.
+- O executor GitHub real consumiu um permit Preview uma única vez, disparou
+  `staging-deploy.yml` e bloqueou replay com `PERMIT_ALREADY_CONSUMED`.
 
 ### Git e repositórios
 
@@ -97,11 +99,53 @@ O fluxo local já comprovou `DENY`, `REVIEW_REQUIRED`, `ALLOW`, ancoragem, consu
 
 ### Preview/Testnet
 
-O saldo foi revalidado em 23/07/2026: a carteira possui `5.000.000.000 tNight`
-e ainda não gerou DUST. O proof server local ficou saudável. Três tentativas
-com Node 24 e Node 22.13.1 falharam em `submitAndWatchExtrinsic` porque
-`wss://rpc.preview.midnight.network/` fechou com code `1000` durante o registro
-do UTXO. O estado continua sem deployment Preview.
+O saldo foi revalidado em 19/08/2026: a carteira possui `5.000.000.000 tNight`
+e `25.000.000.000.000.000.000` DUST. O proof server local respondeu
+`status: ok`. O contrato Preview atual é:
+
+```text
+e9ed0dbb07103d43eaae6de797da1edd178689a3026b169d9d1d673d72465e06
+```
+
+Evidências executadas em 19/08/2026:
+
+```text
+npm run test:e2e -- --network preview -> passou
+npm run cli -- read                 -> network preview, nextId 1 antes da escrita
+npm run cli -- anchor ... ALLOW     -> tx 00d85149f3621fb277f178b7f8d1288d838e9e5d7a7d7c74f7653c908adf605599, bloco 490247
+replay do mesmo ALLOW               -> failed assert: ALLOW action already anchored
+ALLOW com 4/5 evidências             -> failed assert: insufficient evidence
+ALLOW com contradição                -> failed assert: contradictions block ALLOW
+npm run cli -- read                 -> nextId 2
+```
+
+O fluxo HTTP autenticado em `MIDNIGHT_MODE=cli`, com `DATA_DIR` temporário,
+também retornou `ALLOW`, permit presente, `permitNetwork=preview` e o mesmo
+contrato. A tentativa de executar esse permit de simulação falhou com
+`PERMIT_INVALID`, porque ele não possuía proveniência GitHub CI real.
+
+### Executor GitHub real
+
+Evidência executada em 19/08/2026:
+
+```text
+branch de validação          -> codex/day-03-final-validation
+commit validado              -> fba27e939f535b2d155412fd2e2f68f1f3a634ec
+CI real                      -> run 32311156415, conclusion success
+artefato CI                  -> proofrail-web, id 9386498611
+digest CI                    -> sha256:8f1f325979e8fd580f1c6b7dc3b5777cae71347e0176b3fcc585d86adc4860c7
+permit Preview               -> 2da99087-694f-414d-8efe-7244eed84db9
+anchor Preview               -> tx 00589341add7d33f266c6e7fd66586c2c3ad963c443b300031a595a011d1f7f6ab
+execução                     -> HTTP 201, status succeeded
+workflow staging             -> run 32312003968, conclusion success
+artefato staging             -> proofrail-staging-f4907d8e-dd2f-4f21-babf-b572de97bc4b, id 9386764596
+digest staging               -> sha256:476d86f5d3e621afcf9bda96b5c845a21702640e208650788b478e8196aca2ee
+replay do permit             -> HTTP 409, PERMIT_ALREADY_CONSUMED
+```
+
+O webhook usado nessa validação foi assinado com HMAC e injetado localmente com
+payload de run real. Isso valida parsing, assinatura, idempotência, consulta do
+run e artefato real; não comprova entrega HTTPS pública GitHub -> API.
 
 Use somente os scripts do projeto e nunca exponha seed ou mnemonic:
 
@@ -143,7 +187,10 @@ Preprod pertence ao Dia 04. Não pule diretamente para ela.
 - chaves privadas removidas de `data/store.json`;
 - testes positivos e negativos do conector.
 
-Pendência externa do Dia 02: o GitHub App ainda precisa ser criado/instalado, receber um webhook HTTPS real e validar um workflow/artefato reais. Os testes provam o adaptador, mas não substituem essa evidência operacional.
+Pendência externa do Dia 02: o webhook HTTPS público GitHub -> API ainda não
+foi exposto. O workflow/artefato reais foram validados com payload real e HMAC
+local; uma validação pública ainda exige endpoint HTTPS, rate limit e política
+operacional de exposição.
 
 ## Escopo exato da Etapa 03
 
@@ -215,7 +262,7 @@ Não adicionar login visual ou provedor corporativo ainda sem uma decisão expl�
 
 O executor inicialmente pode acionar um workflow de staging predefinido. Não deve receber nome de script, argumentos arbitrários ou URL de destino fornecidos pelo agente.
 
-### Incremento 03.4 — Preview/Testnet — bloqueado no RPC
+### Incremento 03.4 — Preview/Testnet — validado
 
 - revalidar carteira, tNIGHT e DUST;
 - implantar contrato próprio da Preview;

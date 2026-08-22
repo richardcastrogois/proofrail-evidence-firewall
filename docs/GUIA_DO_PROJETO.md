@@ -64,7 +64,7 @@ Para uma decisão `ALLOW`, o contrato rejeita evidência insuficiente, contradi�
 O site foi separado para não misturar explicação com operação:
 
 - **Visão geral:** é a apresentação do produto. Explica o problema, o exemplo de documento falso, as cinco etapas, quem usa cada parte e onde a Midnight entra.
-- **Demonstração:** é o laboratório. Primeiro aparece o botão **Rodar trilha completa** para o pitch; abaixo ficam cenários e controles manuais para aprender ou investigar cada etapa.
+- **Demonstração:** mostra o produto em operação. Primeiro aparece **Verificar evidências**; abaixo ficam cenários e controles manuais para aprender ou investigar cada decisão.
 
 O fluxo visual das duas telas é:
 
@@ -87,7 +87,7 @@ A trilha de auditoria não é o painel operacional principal de quem solicita a 
 
 ### O que significam os botões das fontes
 
-No laboratório, você controla manualmente respostas que em produção viriam de ERP, IAM, CI, cadastro ou outro sistema:
+Na demonstração, você controla respostas que em uma integração externa viriam de ERP, IAM, CI, cadastro ou outro sistema:
 
 - **Simular confirmação:** a origem confiável confirma o fato esperado.
 - **Simular conflito:** a origem responde com valor ou estado divergente; a política deve bloquear a ação.
@@ -121,7 +121,7 @@ O fluxo foi novamente validado na devnet local em 19/07/2026: um documento autod
 
 ## Teste automático para apresentação
 
-O botão **Rodar trilha completa**, no início da demonstração, existe para o pitch e para representar uma integração empresarial.
+O botão **Verificar evidências**, no início da demonstração, coleta as fontes técnicas e aplica a política. Quando a política exige revisão independente, o fluxo para em `REVIEW_REQUIRED` sem emitir permit.
 
 Ele faz numa única chamada:
 
@@ -199,19 +199,25 @@ O health deve mostrar `mode: cli`. No modo local, os três contêineres Midnight
 
 ## Em que pé o projeto está
 
-### Resumo de 22/07/2026
+### Resumo atualizado em 19/08/2026
 
 - **Dia 01 concluído:** o domínio de agente + deploy, as políticas, os commitments, o permit e os caminhos `DENY`, `REVIEW_REQUIRED`, `ALLOW` e replay foram implementados e validados localmente.
 - **Dia 02 concluído no código:** o conector GitHub App, webhook HMAC, consulta por SHA/digest e identidade Ed25519 foram implementados e cobertos por testes locais.
-- **Dia 02 ainda tem uma pendência externa:** criar e instalar o GitHub App em um repositório de teste e receber um workflow real. Sem isso, o conector existe, mas ainda não possui evidência operacional externa.
+- **Dia 02 tem uma pendência de exposição pública:** workflow e artefato reais
+  já foram validados; falta receber o webhook por endpoint HTTPS público com
+  rate limit e política operacional fora do localhost.
 - **Versionamento fechado:** GitLab privado é a fonte principal protegida; GitHub privado é o espelho. Os dois pipelines passaram sobre o mesmo commit.
-- **Dia 03 local concluído:** autenticação por scopes, aprovação humana
-  assinada, executor staging fechado e idempotência persistida foram
-  implementados e validados.
-- **Próximo gate:** concluir a submissão do contrato em Preview. A carteira
-  está financiada, mas o RPC encerrou a conexão durante o registro de DUST. O
-  executor GitHub também permanece desabilitado até receber configuração e
-  token `Actions: write` próprios. A API não deve ser exposta publicamente.
+- **Dia 03 concluído no recorte planejado:** autenticação por scopes,
+  aprovação humana assinada, executor staging fechado e idempotência persistida
+  foram implementados e validados.
+- **Preview/Testnet validada em 19/08/2026:** carteira financiada, DUST
+  positivo, contrato encontrado no indexer público, escrita `ALLOW` real,
+  negativos on-chain de replay/evidência/contradição e fluxo HTTP autenticado
+  com permit em `preview`.
+- **Executor GitHub validado:** CI real passou no run `32311156415`, o permit
+  Preview foi ancorado e consumido uma única vez, o workflow real de staging
+  passou no run `32312003968` e replay retornou `PERMIT_ALREADY_CONSUMED`. A
+  API ainda não deve ser exposta publicamente.
 
 ### Git explicado para quem está começando
 
@@ -294,18 +300,19 @@ Durante a validação, a inicialização detectou `node_modules` instalado pelo 
 
 ### Ainda é demonstração
 
-- o GitHub CI possui conector real opcional; aprovação local é criptográfica,
-  mas identidade corporativa e scanner ainda são simulados, e o executor
-  staging depende de credencial operacional externa;
+- o GitHub CI e o executor staging já foram validados com GitHub Actions real;
+  aprovação local é criptográfica, mas identidade corporativa e scanner ainda
+  são simulados;
 - chaves privadas ficam em arquivo local;
 - não há login, papéis de usuário nem KMS/HSM;
 - o armazenamento é JSON, não banco transacional;
 - a API foi restringida ao localhost, mas não está pronta para exposição pública;
-- o contrato ainda não restringe qual identidade pode chamar `registerDecision`;
+- `registerDecision` exige o witness do registrador autorizado, mas esse segredo ainda fica em arquivo local e precisa migrar para KMS/HSM antes de produção;
 - o circuito valida contagens, contradições e replay de `ALLOW`, porém ainda recebe do backend o resumo da decisão;
 - não existe ainda uma prova Compact completa de cada assinatura, frescor e regra privada;
-- Testnet e Preprod exigem carteira financiada pelo faucet e implantação separada.
-- o GitHub App ainda precisa ser criado/instalado para que o recibo de CI seja validado contra um workflow externo real.
+- Testnet e Preprod usam carteiras financiadas e implantações separadas; ambas passaram E2E e matriz negativa pública.
+- o webhook HTTPS público GitHub -> API ainda precisa ser validado antes de
+  exposição fora do localhost.
 
 ## Próximas melhorias recomendadas
 
@@ -314,9 +321,8 @@ Durante a validação, a inicialização detectou `node_modules` instalado pelo 
 3. Substituir tokens locais e aprovador local por identidade corporativa/KMS.
 4. Mover segredos para KMS/HSM e dados para PostgreSQL com migrations.
 5. Tornar coleta, decisão e execução idempotentes e resilientes a falhas.
-6. Validar o executor controlado contra o workflow staging com credencial
-   mínima e adicionar rollback do destino real.
+6. Adicionar rollback do destino real e validação pública do webhook HTTPS.
 7. Criar testes automatizados de API, frontend, MCP, contrato e ponta a ponta.
-8. Implantar e repetir os testes negativos em Preview e Preprod.
+8. Manter E2E e testes negativos como regressão obrigatória em Preview e Preprod.
 
 Para instalação detalhada, use [`SETUP_WINDOWS.md`](SETUP_WINDOWS.md). Para entender cada pasta e arquivo, use [`ARCHITECTURE.md`](ARCHITECTURE.md). Para os limites criptográficos e a evolução até produção, use [`MIGRACAO_MIDNIGHT.md`](MIGRACAO_MIDNIGHT.md).

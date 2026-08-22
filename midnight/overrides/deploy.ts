@@ -6,7 +6,12 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { resolveNetwork, getOrCreateSeed, recordDeployment } from './network';
+import {
+  resolveNetwork,
+  getOrCreateSeed,
+  getOrCreateRegistrarSecret,
+  recordDeployment,
+} from './network';
 import { createWallet, persistWalletState, unshieldedToken, type WalletContext } from './wallet';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocket } from 'ws';
@@ -23,8 +28,8 @@ import { CompiledContract } from '@midnight-ntwrk/midnight-js-protocol/compact-j
 // @ts-expect-error Required for wallet sync
 globalThis.WebSocket = WebSocket;
 
-// Identifier under which this contract's private state is stored. The
-// hello-world contract has no witnesses, so its private state is empty ({}).
+// The witness reads the registrar secret from the process-local closure. The
+// secret is never a circuit argument, ledger field, or log value.
 const PRIVATE_STATE_ID = 'helloWorldPrivateState';
 
 // ─── Network configuration ─────────────────────────────────────────────────────
@@ -34,6 +39,7 @@ const PRIVATE_STATE_ID = 'helloWorldPrivateState';
 
 const { network, config: networkConfig } = resolveNetwork();
 const SEED = getOrCreateSeed(network);
+const REGISTRAR_SECRET = getOrCreateRegistrarSecret(network);
 
 // ─── Proof server readiness ────────────────────────────────────────────────────
 //
@@ -63,6 +69,27 @@ async function waitForProofServer(maxAttempts = 60, delayMs = 2000): Promise<boo
   return false;
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  return Promise.race([
+    promise,
+    new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`)),
+        timeoutMs,
+      );
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+const DEFAULT_WALLET_SYNC_TIMEOUT_MS = network === 'undeployed' ? 120_000 : 4_500_000;
+const rawWalletSyncTimeout = Number(process.env.MIDNIGHT_DEPLOY_SYNC_TIMEOUT_MS);
+const WALLET_SYNC_TIMEOUT_MS = Number.isFinite(rawWalletSyncTimeout) && rawWalletSyncTimeout > 0
+  ? rawWalletSyncTimeout
+  : DEFAULT_WALLET_SYNC_TIMEOUT_MS;
+
 // ─── Compiled contract loading ─────────────────────────────────────────────────
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -76,9 +103,21 @@ if (!fs.existsSync(contractPath)) {
 
 const HelloWorld = await import(pathToFileURL(contractPath).href);
 
+function bytes32FromHex(value: string): Uint8Array {
+  if (!/^[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error('Registrar secret must contain exactly 32 hexadecimal bytes.');
+  }
+  return Uint8Array.from(value.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16)));
+}
+
+const registrarSecret = bytes32FromHex(REGISTRAR_SECRET);
 const compiledContract = CompiledContract.make('hello-world', HelloWorld.Contract).pipe(
-  CompiledContract.withVacantWitnesses,
-  CompiledContract.withCompiledFileAssets(zkConfigPath),
+  (CompiledContract.withWitnesses as any)({
+    registrarSecret(context: { privateState: unknown }) {
+      return [context.privateState, registrarSecret] as [unknown, Uint8Array];
+    },
+  }),
+  (CompiledContract.withCompiledFileAssets as any)(zkConfigPath),
 );
 
 // ─── Providers ─────────────────────────────────────────────────────────────────
@@ -218,9 +257,22 @@ async function main() {
     const elapsed = Math.round((Date.now() - syncStart) / 1000);
     process.stdout.write(`\r  ⏳ Still syncing... (${elapsed}s elapsed)   `);
   }, 5000);
-  const state = await walletCtx.wallet.waitForSyncedState();
-  clearInterval(syncInterval);
-  process.stdout.write('\r  ✓ Synced with network.                                      \n');
+  let state: Awaited<ReturnType<WalletContext['wallet']['waitForSyncedState']>>;
+  try {
+    state = await withTimeout(
+      walletCtx.wallet.waitForSyncedState(),
+      WALLET_SYNC_TIMEOUT_MS,
+      'Wallet sync',
+    );
+    process.stdout.write('\r  ✓ Synced with network.                                      \n');
+  } catch (err) {
+    process.stdout.write('\n  Saving a best-effort wallet checkpoint before exiting...\n');
+    await persistWalletState(network, walletCtx);
+    await walletCtx.wallet.stop();
+    throw err;
+  } finally {
+    clearInterval(syncInterval);
+  }
 
   // Persist sync state now so a later deploy failure doesn't waste the sync work.
   await persistWalletState(network, walletCtx);
@@ -331,22 +383,29 @@ async function main() {
   // it room to settle between attempts. 20 × 5 = 100s total budget.
   const MAX_RETRIES = 20;
   const RETRY_DELAY_MS = 5000;
+  const rawProofTimeout = Number(process.env.MIDNIGHT_PROOF_TIMEOUT_MS);
+  const proofTimeoutMs = Number.isFinite(rawProofTimeout) && rawProofTimeout > 0
+    ? rawProofTimeout
+    : 240_000;
   let deployed: Awaited<ReturnType<typeof deployContract>> | undefined;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      // Midnight.js 4.1.x supplies private state via privateStateId +
-      // initialPrivateState (empty here — the hello-world contract has no
-      // witnesses). args is the contract constructor's arguments: empty for
-      // hello-world's no-arg constructor. (Statically-typed contracts can omit
+      // Midnight.js 4.1.x supplies the witness implementation through the
+      // compiled contract. The constructor has no public arguments and stores
+      // only the registrar commitment. (Statically-typed contracts can omit
       // args entirely; this script loads the contract dynamically, so the
       // conditional args type widens to any[] and an explicit [] is required.)
-      deployed = await deployContract(providers, {
-        compiledContract: compiledContract as any,
-        args: [],
-        privateStateId: PRIVATE_STATE_ID,
-        initialPrivateState: {},
-      });
+      deployed = await withTimeout(
+        deployContract(providers, {
+          compiledContract: compiledContract as any,
+          args: [],
+          privateStateId: PRIVATE_STATE_ID,
+          initialPrivateState: {},
+        }),
+        proofTimeoutMs,
+        'Contract proof generation',
+      );
       break;
     } catch (err: any) {
       const errMsg = err?.message || err?.toString() || '';
@@ -361,6 +420,13 @@ async function main() {
         fullError.includes('Not enough Dust') ||
         fullError.includes('Insufficient Funds') ||
         fullError.includes('could not balance dust');
+
+      if (fullError.includes('Contract proof generation timed out')) {
+        console.error(`\n  Proof generation exceeded ${Math.round(proofTimeoutMs / 1000)}s.`);
+        console.error('  Check proof-server resources and logs, then retry the deployment.');
+        await walletCtx.wallet.stop();
+        process.exit(1);
+      }
 
       // Quiet the first DUST-shortage retry: it's the expected race between
       // wall-clock projection and block-timestamp accounting and the loud

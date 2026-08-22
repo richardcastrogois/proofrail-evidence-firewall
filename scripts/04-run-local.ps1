@@ -13,4 +13,4 @@ Write-Host "Frontend: http://localhost:5173"
 Write-Host "API:      http://localhost:3333/api/health"
 Write-Host ""
 
-wsl -d $Distro -- bash -lc "source ~/.nvm/nvm.sh && cd '$WslRoot' && MIDNIGHT_MODE=local npm run dev"
+wsl -d $Distro -- bash -lc "source ~/.nvm/nvm.sh && cd '$WslRoot' && bash scripts/run-dev-ordered.sh local"

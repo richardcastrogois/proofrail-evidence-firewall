@@ -56,7 +56,7 @@ const networkCopy: Record<
   preview: {
     label: "Testnet Preview",
     short: "Testnet",
-    description: "Rede pública para testes rápidos com tNIGHT.",
+    description: "Rede pública Midnight com ativos tNIGHT.",
   },
   preprod: {
     label: "Preprod",
@@ -124,6 +124,8 @@ export function App() {
   );
   const [document, setDocument] = useState<LabDocument | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [busySince, setBusySince] = useState<number | null>(null);
+  const [busyElapsedSeconds, setBusyElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [motionMode, setMotionMode] = useState<MotionMode>(() => {
     const saved = window.localStorage.getItem("proofrail-motion");
@@ -151,6 +153,8 @@ export function App() {
 
   async function run(label: string, task: () => Promise<unknown>) {
     setBusy(label);
+    setBusySince(Date.now());
+    setBusyElapsedSeconds(0);
     setError(null);
     try {
       await task();
@@ -159,6 +163,8 @@ export function App() {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setBusy(null);
+      setBusySince(null);
+      setBusyElapsedSeconds(0);
     }
   }
 
@@ -167,6 +173,14 @@ export function App() {
       setError(caught instanceof Error ? caught.message : String(caught)),
     );
   }, []);
+
+  useEffect(() => {
+    if (busySince === null) return;
+    const interval = window.setInterval(() => {
+      setBusyElapsedSeconds(Math.floor((Date.now() - busySince) / 1_000));
+    }, 1_000);
+    return () => window.clearInterval(interval);
+  }, [busySince]);
 
   const { contextSafe } = useGSAP(
     () => {
@@ -288,7 +302,7 @@ export function App() {
     requireWebhook: true,
     allowedRepositories: [],
     apiVersion: "indisponível",
-    missingConfiguration: ["Reinicie a API para carregar o conector do Dia 02"],
+    missingConfiguration: ["Reinicie a API para carregar a configuração do conector"],
   };
   const verifiedSources = new Set(
     state.evidence.filter((entry) => entry.verified).map((entry) => entry.sourceId),
@@ -384,7 +398,7 @@ export function App() {
   async function readDocument(file: File) {
     setError(null);
     if (file.size > 10 * 1024 * 1024) {
-      setError("O laboratório aceita arquivos de até 10 MB.");
+      setError("A demonstração aceita arquivos de até 10 MB.");
       return;
     }
     setBusy("hash-document");
@@ -469,7 +483,7 @@ export function App() {
           </div>
         ) : (
           <button className="header-cta" onClick={() => openSurface("lab")}>
-            Abrir laboratório <ArrowRight />
+            Abrir demonstração <ArrowRight />
           </button>
         )}
         </div>
@@ -581,13 +595,13 @@ export function App() {
               <span>04</span>
               <div>
                 <h2>Um mecanismo, vários controles antes da ação</h2>
-                <p>Agente + deploy é o primeiro piloto. As demais políticas mostram onde o mesmo mecanismo pode operar.</p>
+                <p>Agente + deploy é o fluxo principal. As demais políticas mostram onde o mesmo mecanismo pode operar.</p>
               </div>
             </div>
             <div className="use-case-grid">
               {state.scenarios.map((entry) => (
                 <article className={entry.id === "agent_deploy" ? "featured" : ""} data-reveal-item key={entry.id}>
-                  <span>{entry.id === "agent_deploy" ? "PILOTO PRINCIPAL" : "MODELO DE POLÍTICA"}</span>
+                  <span>{entry.id === "agent_deploy" ? "FLUXO PRINCIPAL" : "POLÍTICA DISPONÍVEL"}</span>
                   <h3>{entry.title}</h3>
                   <p>{entry.description}</p>
                   <div><strong>Comprova com</strong><small>{entry.sources.map((source) => source.name).join(" · ")}</small></div>
@@ -609,10 +623,10 @@ export function App() {
               <div className="onchain" data-reveal-item><strong>Contrato Midnight</strong><span>{shortHash(activeDeployment)}</span></div>
             </div>
             <p>
-              A devnet roda no Docker, e node, indexer, proof server, contrato e
-              transações Midnight são reais nesse ambiente. O primeiro conector real
-              valida GitHub Actions, commit e artefato com um GitHub App de permissão
-              mínima. Os demais botões de fonte e o executor continuam sendo um laboratório.
+              Na execução local, node, indexer, proof server, contrato e transações
+              Midnight operam no Docker. O conector GitHub valida Actions, commit e
+              artefato com permissões mínimas. Fontes sem conector configurado usam
+              respostas controladas para demonstrar as decisões de política.
             </p>
           </section>
 
@@ -625,9 +639,9 @@ export function App() {
         <>
           <section className="lab-intro" id="lab">
             <div>
-              <span className="kicker">LABORATÓRIO GUIADO</span>
+              <span className="kicker">CONTROLE DE EXECUÇÃO</span>
               <h1>{scenario.id === "agent_deploy" ? "Autorize um agente antes do deploy." : `Teste a decisão na ${networkCopy[state.network.active].label}.`}</h1>
-              <p>Este é um laboratório guiado. A política, criptografia, permit e âncora Midnight são reais; o GitHub CI pode usar o conector real configurado, enquanto os demais botões de fonte e o executor ainda simulam integrações.</p>
+              <p>A política, a criptografia, o permit e a âncora Midnight operam de ponta a ponta. Conectores configurados validam fontes externas; as demais fontes usam respostas controladas nesta demonstração.</p>
             </div>
             <div className={`environment-note ${networkReady ? "ready" : "pending"}`}>
               {networkReady ? <CheckCircle2 /> : <TriangleAlert />}
@@ -641,12 +655,12 @@ export function App() {
           <aside className={`github-integration ${github.configured ? "ready" : "pending"}`}>
             {github.configured ? <CheckCircle2 /> : <TriangleAlert />}
             <div>
-              <span className="kicker">INTEGRAÇÃO DO DIA 02</span>
-              <strong>{github.configured ? "GitHub App pronto para evidência real de CI" : "GitHub App implementado, aguardando configuração"}</strong>
+              <span className="kicker">EVIDÊNCIA DE CI</span>
+              <strong>{github.configured ? "GitHub App conectado" : "GitHub App disponível para configuração"}</strong>
               <p>
                 {github.configured
                   ? `Repositórios permitidos: ${github.allowedRepositories.join(", ")}. O agente assina a ação; o webhook e a API do GitHub comprovam o mesmo commit e digest.`
-                  : "A tela continua utilizável no modo laboratório. Para a comprovação real, configure as variáveis abaixo e entregue o webhook workflow_run à API."}
+                  : "A demonstração permanece disponível com respostas controladas. Para validar CI externo, configure as variáveis abaixo e entregue o webhook workflow_run à API."}
               </p>
               {!github.configured ? <code>{github.missingConfiguration.join(" · ")}</code> : null}
             </div>
@@ -678,19 +692,25 @@ export function App() {
           <section className="autopilot autopilot-first">
             <div className="autopilot-mark"><Zap /></div>
             <div>
-              <span className="kicker">COMECE AQUI — SIMULAÇÃO COMPLETA</span>
-              <h2>Rodar {scenario.shortTitle} do início ao fim</h2>
-              <p>Gera recibos de laboratório, decide, ancora na Midnight, consome o permit simulado e destrói as chaves. O conector GitHub real é acionado por agente ou workflow autenticado, não por este botão de pitch.</p>
+              <span className="kicker">VERIFICAÇÃO TÉCNICA</span>
+              <h2>Comprovar {scenario.shortTitle} antes da autorização</h2>
+              <p>Gera recibos assinados, aplica a política e ancora a decisão na Midnight. Quando a política exigir revisão independente, o fluxo para em REVIEW_REQUIRED e nenhum permit é emitido.</p>
+              {busy === "auto" && state.network.active !== "undeployed" ? (
+                <small className="network-wait-note">
+                  Ancoragem real na {networkCopy[state.network.active].label};
+                  isso pode levar alguns minutos. Tempo decorrido: {busyElapsedSeconds}s.
+                </small>
+              ) : null}
             </div>
             <button disabled={busy !== null || !networkReady} onClick={() => run("auto", () => api.runSimulation(action))}>
               {busy === "auto" ? <RefreshCcw className="spin" /> : <Play />}
-              {busy === "auto" ? "Provando na rede…" : "Rodar trilha completa"}
+              {busy === "auto" ? "Provando na rede…" : "Verificar evidências"}
             </button>
           </section>
 
           <section className="scenario-section">
             <div className="section-heading">
-              <div><span className="section-index">A</span><div><h2>Escolha o cenário</h2><p>O cenário troca ação, fontes, limite e política do laboratório.</p></div></div>
+              <div><span className="section-index">A</span><div><h2>Escolha o cenário</h2><p>Cada cenário aplica uma combinação específica de ação, fontes, limites e política.</p></div></div>
               <span className="scenario-count">{state.scenarios.length} políticas</span>
             </div>
             <div className="scenario-grid">
@@ -780,9 +800,9 @@ export function App() {
                 <article className="evidence-stack">
                   <div className="card-title"><span>02</span><div><h3>Fontes exigidas</h3><p>Em produção, ERP, IAM, CI ou cadastro responderiam automaticamente.</p></div></div>
                   <div className="source-explainer">
-                    <strong>No laboratório, você controla a resposta:</strong>
-                    <span><b>Simular confirmação</b> representa a origem confirmando o fato.</span>
-                    <span><b>Simular conflito</b> representa a origem devolvendo valor ou estado divergente.</span>
+                    <strong>Na demonstração, você controla a resposta:</strong>
+                    <span><b>Confirmar evidência</b> representa a origem confirmando o fato.</span>
+                    <span><b>Registrar conflito</b> representa a origem devolvendo valor ou estado divergente.</span>
                   </div>
                   <div className="policy-rule"><ShieldCheck /><span><strong>{state.policy.minIndependentSources} fontes obrigatórias{(state.policy.reviewRequiredClaims?.length ?? 0) > 0 ? ` + ${state.policy.reviewRequiredClaims?.length ?? 0} de revisão quando aplicável` : ""}</strong> · até {state.policy.maxAgeMinutes} min · conflito bloqueia</span></div>
                   {scenario.sources.map((source, index) => {
@@ -790,10 +810,10 @@ export function App() {
                     return (
                       <div className={collected > 0 ? "source-row collected" : "source-row"} key={source.id}>
                         <span className="source-number">{collected > 0 ? <Check /> : index + 1}</span>
-                        <div><strong>{source.name}{source.role === "review" ? <em className="source-role">REVISÃO</em> : null}{source.id === "ci-agent-deploy" ? <em className={`source-role connector ${github.configured ? "ready" : ""}`}>GITHUB APP</em> : null}</strong><p>{source.description}</p><small>{source.id === "ci-agent-deploy" && github.configured ? "Conector real disponível via API/MCP; os botões ao lado continuam simulação." : `${collected} recibo(s) verificado(s)`}</small></div>
+                        <div><strong>{source.name}{source.role === "review" ? <em className="source-role">REVISÃO</em> : null}{source.id === "ci-agent-deploy" ? <em className={`source-role connector ${github.configured ? "ready" : ""}`}>GITHUB APP</em> : null}</strong><p>{source.description}</p><small>{source.id === "ci-agent-deploy" && github.configured ? "Conector externo disponível via API/MCP; os controles ao lado usam respostas de demonstração." : `${collected} recibo(s) verificado(s)`}</small></div>
                         <div className="source-actions">
-                          <button disabled={busy !== null} onClick={() => run(source.id, () => api.collect(source.id, action, "valid"))}>Simular confirmação</button>
-                          <button className="conflict-button" disabled={busy !== null} onClick={() => run(`${source.id}-bad`, () => api.collect(source.id, action, "contradictory"))}>Simular conflito</button>
+                          <button disabled={busy !== null} onClick={() => run(source.id, () => api.collect(source.id, action, "valid"))}>Confirmar evidência</button>
+                          <button className="conflict-button" disabled={busy !== null} onClick={() => run(`${source.id}-bad`, () => api.collect(source.id, action, "contradictory"))}>Registrar conflito</button>
                         </div>
                       </div>
                     );

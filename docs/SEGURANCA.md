@@ -89,17 +89,38 @@ recorte local; não tornam o JSON store seguro para múltiplas instâncias.
 
 O recibo de CI é assinado pelo adaptador Proofrail **depois** de consultar o GitHub. Essa assinatura prova o que o conector verificou; não deve ser descrita como uma assinatura nativa do GitHub sobre o recibo.
 
+## Controles implementados na Etapa 04
+
+| Ameaça | Controle atual |
+|---|---|
+| Backend não autorizado ancora uma decisão | `registerDecision` exige witness que corresponda ao commitment público do registrador |
+| Segredo do registrador é publicado no contrato | o ledger contém apenas `persistentHash` com domínio; o segredo fica no estado privado ignorado pelo Git |
+| Chave comprometida continua emitindo | circuitos de rotação e revogação, com época pública e procedimento de emergência |
+| Registrador antigo volta após rotação | matriz on-chain comprova que o commitment anterior é rejeitado |
+| Política é trocada entre âncora e execução | versão e commitment da política são ancorados e comparados pelo executor |
+| `ALLOW` com prova insuficiente | circuito exige `evidenceCount >= requiredEvidenceCount` |
+| `ALLOW` apesar de contradição | circuito exige contagem de contradições igual a zero |
+| Decisão vencida é registrada | circuito compara validade com o block time |
+| A mesma ação recebe outro `ALLOW` | action commitment consumido é marcado no ledger e replay falha |
+| Logs expõem credenciais | Fastify redige headers, tokens, cookies, seeds e chaves; proof server não usa modo verboso |
+| Logs crescem sem limite | serviços Docker usam rotação de três arquivos de 10 MB |
+
+As matrizes de fechamento passaram em 10/10 nos ambientes Local, Preview e
+Preprod: registrador não autorizado, evidência insuficiente, contradição,
+expiração, caminho autorizado, replay, rotação, rejeição da chave anterior,
+revogação e recuperação. Endereços e transações públicas ficam registrados no
+runbook da Etapa 04.
+
 ## Riscos críticos ainda abertos
 
 ### P0 — bloqueiam exposição pública ou produção
 
 - autenticação por token e scopes existe localmente; identidade forte, rate limit distribuído e proteção operacional continuam ausentes;
 - chaves privadas ainda são arquivos locais; precisam migrar para KMS/HSM antes de produção;
-- somente o CI possui primeiro conector externo; identidade corporativa e scanner ainda são simulações, e o executor GitHub depende de credencial operacional;
-- contrato Compact não restringe qual chamador pode registrar uma decisão;
-- circuito recebe do backend commitments e contagens e ainda não prova assinaturas e política completas;
+- CI e executor staging já foram validados com GitHub Actions real; identidade corporativa e scanner ainda são simulações;
+- o registrador autorizado limita a escrita, mas o circuito ainda recebe do backend commitments e contagens e não prova assinaturas e política completas;
 - estado JSON não garante transação atômica entre múltiplas instâncias;
-- há dispatch fechado para staging, mas ainda não há rollback nem comprovação operacional contra um token `Actions: write`;
+- há dispatch fechado para staging comprovado com token `Actions: write`, mas ainda não há rollback nem destino real de hospedagem;
 - não há rotação/revogação de emissores e administradores.
 
 ### P1 — necessários antes de piloto empresarial
@@ -129,7 +150,11 @@ de hospedagem e rollback continuam fora do repositório.
 
 ## Contrato Compact: decisão de segurança
 
-O contrato atual comprova contagem mínima, zero contradições e replay de `ALLOW`. Antes de produção, deve adotar um registrador autorizado. O padrão oficial de referência usa commitment de owner e witness privado para provar a autoridade sem expor o segredo. A adaptação precisa ser compilada, testada e reimplantada separadamente em cada rede; não deve ser feita por tentativa e erro em Preprod.
+O contrato atual comprova autoridade do registrador por commitment e witness
+privado, contagem mínima, zero contradições, validade e replay de `ALLOW`. Rotação,
+revogação e recuperação foram compiladas e testadas separadamente em Local,
+Preview e Preprod. Antes de produção, ainda é necessário mover para o circuito a
+verificação crítica de assinaturas e regras hoje resumidas pelo backend.
 
 ## Testes negativos obrigatórios
 
@@ -148,10 +173,11 @@ O contrato atual comprova contagem mínima, zero contradições e replay de `ALL
 
 ## Veredito atual
 
-Os incrementos 03.1–03.3 acrescentam autenticação local, aprovação humana
-assinada, separação de credenciais e execução staging idempotente. Ainda não
-resolvem identidade empresarial, custódia profissional, todos os conectores,
-registrador on-chain, banco distribuído, rollback ou operação do executor com
-credencial real. A carteira Preview está financiada, mas a implantação ficou
-bloqueada por desconexão do RPC durante o registro de DUST. A versão não deve
-ser exposta como serviço de produção.
+Os incrementos 03.1–03.4 acrescentam autenticação local, aprovação humana
+assinada, separação de credenciais, ancoragem Preview e execução staging
+idempotente com GitHub Actions real. Ainda não resolvem identidade
+empresarial, custódia profissional, todos os conectores, registrador on-chain,
+banco distribuído, rollback, webhook HTTPS público ou destino real de
+hospedagem. A carteira Preview, DUST, contrato, escrita positiva, negativos
+on-chain, CI real, dispatch staging real e replay bloqueado foram validados em
+19/08/2026. A versão não deve ser exposta como serviço de produção.

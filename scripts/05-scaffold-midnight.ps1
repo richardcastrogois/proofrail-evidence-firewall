@@ -22,8 +22,11 @@ if (-not (Test-Path $ChainRoot)) {
 $ContractTarget = Join-Path $ChainRoot "contracts\hello-world.compact"
 $CliTarget = Join-Path $ChainRoot "src\cli.ts"
 $DeployTarget = Join-Path $ChainRoot "src\deploy.ts"
+$NetworkTarget = Join-Path $ChainRoot "src\network.ts"
+$SetupTarget = Join-Path $ChainRoot "src\setup.ts"
 $CheckBalanceTarget = Join-Path $ChainRoot "src\check-balance.ts"
 $E2eTarget = Join-Path $ChainRoot "scripts\e2e-check.ts"
+$ComposeOverrideTarget = Join-Path $ChainRoot "docker-compose.override.yml"
 
 if (-not (Test-Path (Split-Path -Parent $ContractTarget))) {
     throw "Scaffold incompativel: pasta contracts nao encontrada. Confirme create-mn-app $CreateMnAppVersion."
@@ -49,6 +52,16 @@ Copy-Item `
     -Force
 
 Copy-Item `
+    (Join-Path $ProjectRoot "midnight\overrides\network.ts") `
+    $NetworkTarget `
+    -Force
+
+Copy-Item `
+    (Join-Path $ProjectRoot "midnight\overrides\setup.ts") `
+    $SetupTarget `
+    -Force
+
+Copy-Item `
     (Join-Path $ProjectRoot "midnight\overrides\check-balance.ts") `
     $CheckBalanceTarget `
     -Force
@@ -58,11 +71,12 @@ Copy-Item `
     $E2eTarget `
     -Force
 
-$SetupCommand = if ($Network -eq "undeployed") {
-    "npm run setup"
-} else {
-    "npm run setup -- --network $Network"
-}
+Copy-Item `
+    (Join-Path $ProjectRoot "midnight\docker-compose.override.yml") `
+    $ComposeOverrideTarget `
+    -Force
+
+$SetupCommand = "npm run setup -- --network $Network"
 
 Write-Host "Compilando e implantando na rede Midnight '$Network'..." -ForegroundColor Cyan
 wsl -d $Distro -- bash -lc "source ~/.nvm/nvm.sh && cd '$WslChain' && $SetupCommand"

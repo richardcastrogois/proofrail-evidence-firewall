@@ -1,6 +1,6 @@
 import { createPublicKey, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   ActionPermitSchema,
   ControlledExecutionSchema,
@@ -49,6 +49,7 @@ import {
 import {
   createAnchorAdapter,
   getNetworkStatus,
+  MidnightAnchorError,
   switchMidnightNetwork,
 } from "./midnight-adapter";
 import {
@@ -299,6 +300,7 @@ function executionDispatch(
     anchor.actionCommitment !== permit.actionCommitment ||
     anchor.evidenceRoot !== permit.evidenceRoot ||
     anchor.policyCommitment !== permit.policyCommitment ||
+    anchor.policyVersion !== permit.policyVersion ||
     anchor.decision !== "ALLOW" ||
     anchor.validUntil !== permit.expiresAt
   ) {
@@ -448,7 +450,7 @@ export async function registerRoutes(
 ): Promise<void> {
   registerServiceAuthentication(app, serviceAuthenticator);
 
-  async function evaluateAndPersist(action: ProposedAction) {
+  async function evaluateAndPersist(action: ProposedAction, request?: FastifyRequest) {
     const database = await store.read();
     ensureSelectedAction(database, action);
     verifyAllEvidence(database);
@@ -457,7 +459,48 @@ export async function registerRoutes(
       policy: database.policy,
       evidence: database.evidence,
     });
-    const anchor = await createAnchorAdapter().anchor(decision);
+    const anchorStartedAt = Date.now();
+    request?.log.info(
+      {
+        operation: "midnight.anchor",
+        requestId: action.requestId,
+        scenarioId: action.scenarioId,
+        decision: decision.status,
+        policyVersion: database.policy.version,
+        evidenceCount: decision.evidenceIds.length,
+        contradictionCount: decision.contradictions.length,
+      },
+      "Midnight anchor started",
+    );
+    let anchor;
+    try {
+      anchor = await createAnchorAdapter().anchor(
+        decision,
+        database.policy.version,
+      );
+    } catch (error) {
+      request?.log.error(
+        {
+          operation: "midnight.anchor",
+          requestId: action.requestId,
+          durationMs: Date.now() - anchorStartedAt,
+          code: error instanceof MidnightAnchorError ? error.code : "UNEXPECTED_ERROR",
+          message: error instanceof Error ? error.message : "Unknown Midnight anchor error",
+        },
+        "Midnight anchor failed",
+      );
+      throw error;
+    }
+    request?.log.info(
+      {
+        operation: "midnight.anchor",
+        requestId: action.requestId,
+        durationMs: Date.now() - anchorStartedAt,
+        network: anchor.network,
+        transactionId: anchor.txId,
+      },
+      "Midnight anchor confirmed",
+    );
     decision.anchorId = anchor.id;
     if (decision.status === "ALLOW") {
       const issuedAt = new Date().toISOString();
@@ -497,6 +540,23 @@ export async function registerRoutes(
       );
     });
     return decision;
+  }
+
+  function sendAnchorError(
+    request: Parameters<typeof sendApiError>[0],
+    reply: FastifyReply,
+    error: MidnightAnchorError,
+  ) {
+    const timedOut = error.code === "MIDNIGHT_ANCHOR_TIMEOUT";
+    return sendApiError(
+      request,
+      reply,
+      timedOut ? 504 : 502,
+      "ANCHOR_UNAVAILABLE",
+      timedOut
+        ? "A rede Midnight não confirmou a ancoragem dentro do limite. A transação pode ter sido submetida; consulte os logs e o estado público antes de repetir."
+        : "A ancoragem Midnight falhou antes de confirmar o recibo. Consulte os logs [API] e tente novamente.",
+    );
   }
 
   app.get("/api/health", async () => ({
@@ -811,9 +871,19 @@ export async function registerRoutes(
     });
   });
 
-  app.post("/api/evaluate", async (request) =>
-    evaluateAndPersist(ProposedActionSchema.parse(request.body)),
-  );
+  app.post("/api/evaluate", async (request, reply) => {
+    try {
+      return await evaluateAndPersist(
+        ProposedActionSchema.parse(request.body),
+        request,
+      );
+    } catch (error) {
+      if (error instanceof MidnightAnchorError) {
+        return sendAnchorError(request, reply, error);
+      }
+      throw error;
+    }
+  });
 
   app.post("/api/approvals", async (request, reply) => {
     try {
@@ -1030,48 +1100,65 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/simulation/run", async (request) => {
-    const action = ProposedActionSchema.parse(request.body);
-    const originKeys = new Map<string, string>();
-    const selectedOrigins = (await store.read()).origins.filter(
-      (origin) =>
-        origin.scenarioId === action.scenarioId &&
-        origin.sourceClass !== "signed_approval",
-    );
-    for (const origin of selectedOrigins) {
-      originKeys.set(origin.id, await store.originPrivateKey(origin.id));
-    }
-    await store.update(async (database) => {
-      ensureSelectedAction(database, action);
-      database.defaultAction = action;
-      const origins = database.origins.filter(
+  app.post("/api/simulation/run", async (request, reply) => {
+    try {
+      const action = ProposedActionSchema.parse(request.body);
+      const originKeys = new Map<string, string>();
+      const selectedOrigins = (await store.read()).origins.filter(
         (origin) =>
           origin.scenarioId === action.scenarioId &&
           origin.sourceClass !== "signed_approval",
       );
-      for (const origin of origins) {
-        const receipt = await createSignedEvidence({
-          database,
-          sourceId: origin.id,
-          action,
-          variant: "valid",
-          privateKeyPem: originKeys.get(origin.id)!,
-        });
-        receipt.verified = verifyEvidenceReceipt(receipt, origin.publicKeyPem);
-        database.evidence.push(receipt);
-        database.audit.push(
-          auditEvent("ORIGIN_EVIDENCE_COLLECTED", `${origin.name} emitiu uma evidência válida.`, {
-            evidenceId: receipt.id,
-            automatic: true,
-          }),
-        );
+      for (const origin of selectedOrigins) {
+        originKeys.set(origin.id, await store.originPrivateKey(origin.id));
       }
-    });
-    const decision = await evaluateAndPersist(action);
-    const expired = await store.update((database) =>
-      expireRequestEvidence(database, action.requestId),
-    );
-    return { decision, execution: null, expired };
+      await store.update(async (database) => {
+        ensureSelectedAction(database, action);
+        database.defaultAction = action;
+        const actionCommitment = sha256Hex(action);
+        const origins = database.origins.filter(
+          (origin) =>
+            origin.scenarioId === action.scenarioId &&
+            origin.sourceClass !== "signed_approval",
+        );
+        for (const origin of origins) {
+          const reusable = database.evidence.some(
+            (receipt) =>
+              receipt.requestId === action.requestId &&
+              receipt.sourceId === origin.id &&
+              receipt.actionCommitment === actionCommitment &&
+              receipt.verified &&
+              new Date(receipt.expiresAt).getTime() > Date.now(),
+          );
+          if (reusable) continue;
+          const receipt = await createSignedEvidence({
+            database,
+            sourceId: origin.id,
+            action,
+            variant: "valid",
+            privateKeyPem: originKeys.get(origin.id)!,
+          });
+          receipt.verified = verifyEvidenceReceipt(receipt, origin.publicKeyPem);
+          database.evidence.push(receipt);
+          database.audit.push(
+            auditEvent("ORIGIN_EVIDENCE_COLLECTED", `${origin.name} emitiu uma evidência válida.`, {
+              evidenceId: receipt.id,
+              automatic: true,
+            }),
+          );
+        }
+      });
+      const decision = await evaluateAndPersist(action, request);
+      const expired = await store.update((database) =>
+        expireRequestEvidence(database, action.requestId),
+      );
+      return { decision, execution: null, expired };
+    } catch (error) {
+      if (error instanceof MidnightAnchorError) {
+        return sendAnchorError(request, reply, error);
+      }
+      throw error;
+    }
   });
 
   app.post("/api/execute", async (request, reply) => {

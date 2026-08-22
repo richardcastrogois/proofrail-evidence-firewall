@@ -252,6 +252,7 @@ export const AnchorRecordSchema = z.object({
   contractAddress: z.string().nullable(),
   evidenceRoot: z.string(),
   policyCommitment: z.string(),
+  policyVersion: z.number().int().positive().default(1),
   actionCommitment: z.string(),
   decision: DecisionStatusSchema,
   validUntil: z.string().datetime(),

@@ -4,15 +4,17 @@ Este diretório concentra a documentação destinada a desenvolvedores, avaliado
 
 ## Ordem de leitura recomendada
 
-1. [`HANDOFF_ETAPA_03.md`](HANDOFF_ETAPA_03.md) — contexto mínimo e verificável para iniciar a Etapa 03 em um novo chat.
-2. [`GUIA_DO_PROJETO.md`](GUIA_DO_PROJETO.md) — o que o produto resolve, como funciona e como testar o fluxo visual.
-3. [`SETUP_WINDOWS.md`](SETUP_WINDOWS.md) — instalação, execução local e comandos de diagnóstico no Windows/WSL.
-4. [`ARCHITECTURE.md`](ARCHITECTURE.md) — componentes, arquivos, fluxo de dados e fronteiras de confiança.
-5. [`SEGURANCA.md`](SEGURANCA.md) — ameaças, controles implementados e bloqueios antes de produção.
-6. [`GITHUB_APP.md`](GITHUB_APP.md) — configuração do conector GitHub com privilégio mínimo.
-7. [`MIGRACAO_MIDNIGHT.md`](MIGRACAO_MIDNIGHT.md) — garantias atuais e evolução do contrato/provas na Midnight.
-8. [`PLANO_4_DIAS.md`](PLANO_4_DIAS.md) — histórico do plano incremental e critérios de aceite.
-9. [`REPOSITORIO_PRIVADO_GRATUITO.md`](REPOSITORIO_PRIVADO_GRATUITO.md) — estratégia GitLab privado principal + GitHub privado como espelho, proteção da `main` e fluxo diário.
+1. [`PITCH_E_TESTE_LOCAL.md`](PITCH_E_TESTE_LOCAL.md) — resumo para postagem, venda do pitch e roteiro simples para testar localmente.
+2. [`ETAPA_04_PREPROD_OPERACAO.md`](ETAPA_04_PREPROD_OPERACAO.md) — contrato endurecido, Preprod, matriz negativa e runbook operacional.
+3. [`HANDOFF_ETAPA_03.md`](HANDOFF_ETAPA_03.md) — histórico e evidências do fechamento da Etapa 03.
+4. [`GUIA_DO_PROJETO.md`](GUIA_DO_PROJETO.md) — o que o produto resolve, como funciona e como testar o fluxo visual.
+5. [`SETUP_WINDOWS.md`](SETUP_WINDOWS.md) — instalação, execução local e comandos de diagnóstico no Windows/WSL.
+6. [`ARCHITECTURE.md`](ARCHITECTURE.md) — componentes, arquivos, fluxo de dados e fronteiras de confiança.
+7. [`SEGURANCA.md`](SEGURANCA.md) — ameaças, controles implementados e bloqueios antes de produção.
+8. [`GITHUB_APP.md`](GITHUB_APP.md) — configuração do conector GitHub com privilégio mínimo.
+9. [`MIGRACAO_MIDNIGHT.md`](MIGRACAO_MIDNIGHT.md) — garantias atuais e evolução do contrato/provas na Midnight.
+10. [`PLANO_4_DIAS.md`](PLANO_4_DIAS.md) — histórico do plano incremental e critérios de aceite.
+11. [`REPOSITORIO_PRIVADO_GRATUITO.md`](REPOSITORIO_PRIVADO_GRATUITO.md) — estratégia GitLab privado principal + GitHub privado como espelho, proteção da `main` e fluxo diário.
 
 ## O que nunca deve ser publicado
 

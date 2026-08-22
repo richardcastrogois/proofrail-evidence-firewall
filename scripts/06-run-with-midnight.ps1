@@ -18,4 +18,4 @@ Write-Host "Frontend: http://localhost:5173"
 Write-Host "API:      http://localhost:3333/api/health"
 Write-Host ""
 
-wsl -d $Distro -- bash -lc "source ~/.nvm/nvm.sh && cd '$WslRoot' && npm run store:migrate --workspace @rational/api && MIDNIGHT_MODE=cli MIDNIGHT_CHAIN_DIR='$WslChain' npm run dev"
+wsl -d $Distro -- bash -lc "source ~/.nvm/nvm.sh && cd '$WslRoot' && bash scripts/run-dev-ordered.sh cli '$WslChain'"

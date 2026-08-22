@@ -231,7 +231,7 @@ O resultado esperado é `schema v4` sem chaves privadas no store público. O com
 
 ### 3.6 Opcional: configurar o primeiro conector real
 
-O site funciona sem credenciais no modo laboratório. Para fazer a fonte **Pipeline CI** consultar um repositório e artefato reais, siga [GITHUB_APP.md](GITHUB_APP.md). A API carrega um arquivo `.env` local na inicialização; ele é ignorado pelo Git e nunca deve ser compartilhado.
+O site funciona sem credenciais com respostas controladas. Para fazer a fonte **Pipeline CI** consultar um repositório e artefato reais, siga [GITHUB_APP.md](GITHUB_APP.md). A API carrega um arquivo `.env` local na inicialização; ele é ignorado pelo Git e nunca deve ser compartilhado.
 
 ### 3.7 Abrir no VS Code conectado ao WSL
 
@@ -262,14 +262,14 @@ Invoke-RestMethod http://127.0.0.1:3333/api/health
 
 ## 4. Roteiro funcional da demonstração local
 
-1. Escolha uma das nove políticas. **Agente + Deploy** é o piloto principal.
+1. Escolha uma das nove políticas. **Agente + Deploy** é o fluxo principal.
 2. Registre a alegação do agente e avalie sem fontes: o esperado é `DENY`.
 3. Confirme identidade, política de ferramentas, CI e scanner: em produção/risco 45, o esperado é `REVIEW_REQUIRED`.
 4. Confirme a aprovação responsável e avalie: o esperado é `ALLOW` com âncora e permit.
 5. Reinicie e simule conflito no CI ou scanner: o esperado é `DENY`.
 6. Execute o permit e confirme que ele não pode ser consumido duas vezes.
 7. Destrua as chaves e confirme que os dados brutos acessíveis caem para zero.
-8. Para uma apresentação curta, reinicie e use `Rodar trilha completa`.
+8. Para uma apresentação curta, reinicie e use `Verificar evidências`.
 
 O tutorial de cliques e o significado de cada retorno estão em `GUIA_DO_PROJETO.md`.
 
@@ -407,7 +407,10 @@ Os scripts já fornecem os valores necessários. Para execução manual, copie `
 | `RATIONAL_API_URL` | `http://127.0.0.1:3333` | Alias legado aceito pelo MCP |
 | `MIDNIGHT_MODE` | `local` | `local` ou `cli` |
 | `MIDNIGHT_CHAIN_DIR` | caminho WSL de `midnight-chain` | Obrigatório em modo `cli` |
-| `MIDNIGHT_CLI_TIMEOUT_MS` | `360000` | Limite para sincronizar, provar e enviar uma transação Midnight |
+| `MIDNIGHT_CLI_TIMEOUT_MS` | `600000` | Limite para sincronizar, provar, enviar e confirmar uma transação Midnight; o navegador aguarda 30 s adicionais |
+| `MIDNIGHT_PROOF_TIMEOUT_MS` | `240000` | Limite da geração de prova durante a implantação |
+| `LOG_LEVEL` | `info` | Nível dos logs estruturados da API |
+| `PROOFRAIL_LOG_FORMAT` | `pretty` | `pretty` para terminal ou `json` para coleta externa |
 | `DATA_DIR` | `data` na raiz | Sobrescreve o diretório de persistência |
 
 ## 8. Comandos úteis

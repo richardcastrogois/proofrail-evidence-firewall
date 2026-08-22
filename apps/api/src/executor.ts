@@ -16,6 +16,21 @@ const RepositorySchema = z
   .string()
   .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/);
 
+function normalizeConfigPath(configPath: string): string {
+  const trimmed = configPath.trim();
+  const windowsAbsolutePath = /^([A-Za-z]):[\\/](.*)$/.exec(trimmed);
+  if (windowsAbsolutePath && process.platform !== "win32") {
+    const drive = windowsAbsolutePath[1]!;
+    const rest = windowsAbsolutePath[2]!;
+    return path.join(
+      "/mnt",
+      drive.toLowerCase(),
+      ...rest.split(/[\\/]+/).filter(Boolean),
+    );
+  }
+  return path.resolve(trimmed);
+}
+
 export const ExecutorConfigSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -78,6 +93,9 @@ export interface StagingExecutor {
 
 export class ExecutionNotAllowedError extends Error {}
 export class ExternalExecutionError extends Error {}
+export const __test = {
+  normalizeConfigPath,
+};
 
 export class DisabledStagingExecutor implements StagingExecutor {
   assertAllowed(): void {
@@ -199,7 +217,7 @@ export class GitHubWorkflowExecutor implements StagingExecutor {
 export async function loadStagingExecutor(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<StagingExecutor> {
-  const configPath = path.resolve(
+  const configPath = normalizeConfigPath(
     env.PROOFRAIL_EXECUTOR_CONFIG ?? defaultConfigPath,
   );
   let parsed: unknown;

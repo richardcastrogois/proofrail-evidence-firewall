@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import { randomUUID } from "node:crypto";
 import { loadEnvFile } from "node:process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,9 +24,33 @@ const port = Number(process.env.PORT ?? 3333);
 const host = process.env.HOST ?? "127.0.0.1";
 
 const app = Fastify({
-  logger: true,
+  logger: {
+    level: process.env.LOG_LEVEL?.trim() || "info",
+    redact: {
+      paths: [
+        "req.headers.authorization",
+        "req.headers.cookie",
+        "req.headers.x-github-token",
+        "req.headers.x-hub-signature-256",
+        "res.headers.set-cookie",
+        "*.token",
+        "*.secret",
+        "*.seed",
+        "*.privateKeyPem",
+      ],
+      censor: "[REDACTED]",
+    },
+  },
+  genReqId(request) {
+    const supplied = request.headers["x-request-id"];
+    return typeof supplied === "string" && /^[A-Za-z0-9._:-]{1,100}$/.test(supplied)
+      ? supplied
+      : randomUUID();
+  },
   bodyLimit: 256 * 1024,
-  requestTimeout: 420_000,
+  // The CLI ceiling is 10 minutes; keep Fastify alive long enough to return
+  // the confirmed receipt or the adapter's explicit timeout response.
+  requestTimeout: 660_000,
 });
 
 await app.register(cors, {
@@ -63,4 +88,12 @@ try {
 } catch (error) {
   app.log.error(error);
   process.exit(1);
+}
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, async () => {
+    app.log.info({ signal }, "Shutting down Proofrail API");
+    await app.close();
+    process.exit(0);
+  });
 }
