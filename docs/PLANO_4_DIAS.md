@@ -164,7 +164,20 @@ Critério de aceite: uma solicitação aprovada publica apenas em staging e gera
 
 Objetivo: reduzir a confiança no backend e preparar uma demonstração técnica responsável.
 
-Entregas:
+Estado em 21/08/2026: **implementacao concluida; gates Local, Preview e Preprod
+aprovados.** O contrato agora exige registrador autorizado por
+commitment/witness, ancora versão da política e valida contagens, contradição,
+validade e replay. Rotação, revogação e recuperação passaram nas matrizes de
+10 controles de Local, Preview e Preprod. Logs foram correlacionados, redigidos e limitados; o runbook
+de incidente, backup, recuperação e rollback está em
+[`ETAPA_04_PREPROD_OPERACAO.md`](ETAPA_04_PREPROD_OPERACAO.md). O contrato
+Preview separado foi implantado e passou na matriz publica de 10 controles. Em
+Preprod, a primeira sincronizacao longa foi retomada por checkpoint sem repetir
+o faucet; DUST foi gerado, o contrato separado foi implantado e E2E e matriz
+10/10 foram aprovados. O historico e os comandos reproduziveis permanecem no
+runbook da Etapa 04.
+
+Entregas concluídas:
 
 - adicionar administradores/registradores autorizados ao contrato Compact conforme o padrão de owner commitment e witness da documentação Midnight;
 - provar no circuito as regras críticas que couberem no recorte: autorização do registrador, versão/commitment da política, quantidade, contradição, validade e replay;

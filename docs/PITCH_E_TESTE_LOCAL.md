@@ -9,7 +9,7 @@ O Proofrail é um firewall de evidências para agentes de IA, automações e
 decisões de alto risco.
 
 Em vez de confiar só no pedido de um agente, ele exige provas independentes
-antes de liberar uma ação. O piloto atual protege um fluxo de deploy: o agente
+antes de liberar uma ação. O fluxo principal protege um deploy: o agente
 pode solicitar uma publicação, mas não pode escolher outro commit, substituir o
 artefato, aprovar a si mesmo ou executar um comando livre.
 
@@ -35,7 +35,7 @@ automações.
 A ideia é simples: antes de uma IA executar uma ação sensível, ela precisa
 provar, com fontes independentes, que a ação está autorizada.
 
-No primeiro piloto, controlei um deploy solicitado por agente:
+No fluxo principal, controlei um deploy solicitado por agente:
 
 - o pedido vincula agente, tarefa, repositório, commit, artefato, serviço,
   ambiente, risco e nonce;
@@ -46,26 +46,28 @@ No primeiro piloto, controlei um deploy solicitado por agente:
 - o executor aceita o permit uma única vez e bloqueia replay.
 
 O estado atual já valida o circuito principal: CI real, artefato real, decisão
-ALLOW em Preview/Testnet da Midnight, executor staging via GitHub Actions e
-replay bloqueado.
+ALLOW em Preview/Testnet e Preprod da Midnight, executor staging via GitHub
+Actions, registrador Compact autorizado e replay bloqueado.
 
 Ainda não é produção: faltam KMS/HSM, identidade corporativa, banco
-transacional, webhook HTTPS público, rollback, Preprod e endurecimento do
-contrato para registrador autorizado.
+transacional, webhook HTTPS público, rollback do destino real e operação com
+SLOs. Preprod foi validada como ensaio público, mas não é um selo de produção.
 
 Mas a tese está demonstrada: a IA pode pedir; quem libera é a evidência.
 ```
 
 ## O que já funciona
 
-- Nove cenários de política no laboratório.
-- Piloto principal de agente de IA solicitando deploy.
+- Nove cenários de política na demonstração.
+- Fluxo principal de agente de IA solicitando deploy.
 - Commitments criptográficos vinculando ação, evidências, política e permit.
 - Recibos assinados com Ed25519.
 - Dados brutos criptografados com AES-256-GCM e apagamento criptográfico.
 - Decisões `DENY`, `REVIEW_REQUIRED` e `ALLOW`.
 - Permit assinado, temporário, vinculado a rede/contrato/âncora e de uso único.
 - Contrato Compact na Midnight para registrar decisões.
+- Registrador Compact protegido por commitment/witness, com rotação e revogação.
+- Regras on-chain para versão da política, contagens, contradição, validade e replay.
 - Devnet local com node, indexer e proof server.
 - Preview/Testnet validada com carteira financiada, DUST, contrato implantado,
   escrita `ALLOW` real e negativos on-chain.
@@ -107,10 +109,10 @@ GitHub -> API ainda precisa ser validada antes de expor o serviço.
 - KMS/HSM para chaves privadas.
 - PostgreSQL ou banco transacional com locks distribuídos.
 - Rollback do destino real de staging.
-- Preprod com contrato, carteira e matriz negativa separados.
-- Contrato Compact com registrador autorizado.
-- Provas mais completas no circuito para política, emissores, frescor e
-  assinaturas.
+- Transformar a sincronizacao publica, hoje adequada a bootstrap e diagnostico,
+  em operacao persistente e observavel com SLO, alertas e retomada automatica.
+- Mover o worker Midnight para Linux nativo persistente e adicionar fila assíncrona.
+- Evoluir as provas do circuito para assinaturas e frescor de emissores externos.
 
 ## Como testar localmente
 
@@ -162,7 +164,7 @@ Na tela:
 
 1. entre em **Demonstração**;
 2. mantenha o cenário **Agente + Deploy**;
-3. clique em **Rodar trilha completa**;
+3. clique em **Verificar evidências**;
 4. observe as etapas `Propor -> Comprovar -> Decidir -> Autorizar -> Executar`;
 5. veja a auditoria registrando decisão, permit e execução;
 6. tente executar o mesmo permit de novo e confirme que o replay é bloqueado.

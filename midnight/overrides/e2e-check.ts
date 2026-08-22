@@ -34,7 +34,28 @@ async function main() {
   }
 
   const publicDataProvider = indexerPublicDataProvider(networkConfig.indexer, networkConfig.indexerWS);
-  const onChainState = await publicDataProvider.queryContractState(deployment.address);
+  const attempts = 8;
+  const attemptTimeoutMs = 15_000;
+  let onChainState: Awaited<ReturnType<typeof publicDataProvider.queryContractState>> = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    process.stdout.write(`e2e-check: querying indexer (${attempt}/${attempts})...\n`);
+    try {
+      onChainState = await Promise.race([
+        publicDataProvider.queryContractState(deployment.address),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`indexer query timed out after ${attemptTimeoutMs}ms`)),
+            attemptTimeoutMs,
+          ),
+        ),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`e2e-check: attempt ${attempt} failed: ${message}\n`);
+    }
+    if (onChainState) break;
+    if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, 5_000));
+  }
   if (!onChainState) {
     fail(`queryContractState returned null for ${deployment.address}`);
   }

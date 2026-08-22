@@ -1,0 +1,19 @@
+services:
+  node:
+    logging: &bounded-logs
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  indexer:
+    logging: *bounded-logs
+
+  proof-server:
+    # The verbose flag logs proof request payloads. Keep operational output
+    # concise and prevent sensitive witness material from reaching Docker logs.
+    command: ["midnight-proof-server"]
+    environment:
+      RUST_BACKTRACE: "1"
+      RUST_LOG: "warn"
+    logging: *bounded-logs

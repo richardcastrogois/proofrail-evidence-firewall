@@ -17,7 +17,7 @@ Isso não significa que a visão de produção esteja completa. O GitHub CI já 
 | Compact | compila e registra decisões na devnet local |
 | Devnet local | node, indexer e proof server em Docker |
 | Preview/Testnet | implantada e validada com escrita e negativos on-chain |
-| Preprod | configurada; implantação depende de faucet/saldo |
+| Preprod | implantada e validada com E2E e matriz negativa 10/10 |
 | Fontes empresariais reais | GitHub CI implementado; demais fontes ainda não integradas |
 | Execução empresarial real | executor staging validado com GitHub Actions; destino real e rollback pendentes |
 
@@ -87,7 +87,11 @@ Witnesses são dados off-chain e não devem ser tratados como confiáveis sem as
 
 ### Risco P0 do contrato atual
 
-O circuito ainda não restringe qual identidade pode chamar `registerDecision`. Isso significa que uma implantação pública não deve ser tratada como pronta enquanto o contrato não verificar um registrador autorizado. A referência oficial Bulletin Board demonstra o padrão de owner commitment + witness privado; a adaptação ao Proofrail precisa ser compilada, testada contra chamador indevido e implantada separadamente em cada rede.
+O circuito restringe `registerDecision` por commitment público e witness privado
+do registrador. A implementação também suporta rotação, revogação e recuperação,
+e foi compilada e testada contra chamador indevido separadamente em Local,
+Preview e Preprod. O segredo ainda precisa migrar do arquivo local para KMS/HSM
+antes de produção.
 
 ## Local, Preview/Testnet e Preprod
 
@@ -153,7 +157,7 @@ A visão completa só deve ser chamada de pronta quando:
 - segredos estiverem em KMS/HSM;
 - API tiver identidade, escopo, rate limit e trilha imutável;
 - persistência transacional e idempotência distribuída estiverem implementadas;
-- o fluxo completo passar em Preview e depois Preprod.
+- as matrizes Preview e Preprod continuarem no gate de regressão a cada nova implantação.
 
 ## Ordem recomendada
 
@@ -164,7 +168,7 @@ A visão completa só deve ser chamada de pronta quando:
 5. Criar testes de contrato para falsificação, expiração, contradição e replay.
 6. Colocar o permit como requisito técnico de um executor real controlado.
 7. Adicionar KMS/HSM, PostgreSQL, autenticação e observabilidade.
-8. Implantar em Preview, executar testes negativos e repetir em Preprod.
+8. Manter E2E e matriz negativa obrigatórios em novas implantações Preview e Preprod.
 
 ## Diagnóstico honesto
 
@@ -173,8 +177,8 @@ O Proofrail demonstra bem a tese: autodeclaração não basta, evidência isolad
 O ponto mais forte é a separação entre evidência, decisão, autorização e
 execução. O GitHub CI e o executor staging já foram validados contra workflow e
 artefatos reais em 19/08/2026. O maior risco ainda é a concentração de
-confiança no backend, nas origens que permanecem simuladas e na ausência de
-registrador autorizado on-chain. O próximo passo é adicionar
+confiança no backend e nas origens que permanecem simuladas. O registrador
+autorizado on-chain e as matrizes públicas já foram validados. O próximo passo é adicionar
 identidade/scanner independentes, webhook HTTPS público controlado e fazer o
 circuito verificar a parte crítica da política.
 

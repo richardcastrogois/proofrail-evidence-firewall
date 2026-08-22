@@ -12,8 +12,11 @@ globalThis.WebSocket = WebSocket;
 const { network, config: networkConfig } = resolveNetwork();
 const SEED = getOrCreateSeed(network);
 
-const MAX_SYNC_ATTEMPTS = Number(process.env.MIDNIGHT_BALANCE_SYNC_ATTEMPTS ?? '3');
-const DEFAULT_SYNC_TIMEOUT_MS = network === 'undeployed' ? 120_000 : 600_000;
+const DEFAULT_SYNC_ATTEMPTS = network === 'undeployed' ? 3 : 1;
+const MAX_SYNC_ATTEMPTS = Number(process.env.MIDNIGHT_BALANCE_SYNC_ATTEMPTS ?? String(DEFAULT_SYNC_ATTEMPTS));
+// A fresh public wallet may need to scan a long chain history. Retrying a
+// timed-out first scan from scratch is slower than giving it one honest window.
+const DEFAULT_SYNC_TIMEOUT_MS = network === 'undeployed' ? 120_000 : 2_700_000;
 const SYNC_TIMEOUT_MS = Number(process.env.MIDNIGHT_BALANCE_SYNC_TIMEOUT_MS ?? String(DEFAULT_SYNC_TIMEOUT_MS));
 
 async function stopWallet(ctx: WalletContext | undefined): Promise<void> {
@@ -75,6 +78,10 @@ async function syncWalletWithRetry(): Promise<{
       }
     } catch (err) {
       lastError = err;
+      if (ctx) {
+        console.log('\n  Saving a best-effort wallet checkpoint before retry/exit...');
+        await persistWalletState(network, ctx);
+      }
       await stopWallet(ctx);
       const msg = err instanceof Error ? err.message : String(err);
       console.log(`\n  Sync attempt ${attempt} failed: ${msg}`);

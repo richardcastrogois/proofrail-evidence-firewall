@@ -176,6 +176,7 @@ export const ApiErrorCodeSchema = z.enum([
   "EXECUTION_NOT_ALLOWED",
   "EXECUTION_IN_PROGRESS",
   "EXECUTION_FAILED",
+  "ANCHOR_UNAVAILABLE",
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 

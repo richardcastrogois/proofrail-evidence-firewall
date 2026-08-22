@@ -13,11 +13,37 @@ import type {
 const execFileAsync = promisify(execFile);
 
 export interface AnchorAdapter {
-  anchor(decision: DecisionResult): Promise<AnchorRecord>;
+  anchor(decision: DecisionResult, policyVersion: number): Promise<AnchorRecord>;
+}
+
+export class MidnightAnchorError extends Error {
+  constructor(
+    readonly code: "MIDNIGHT_ANCHOR_TIMEOUT" | "MIDNIGHT_ANCHOR_FAILED",
+    message: string,
+    readonly timeoutMs?: number,
+  ) {
+    super(message);
+  }
+}
+
+function npmInvocation(args: string[]) {
+  if (process.platform === "win32") {
+    return { command: "npm.cmd", args };
+  }
+  const quotedArgs = args
+    .map((arg) => `'${arg.replaceAll("'", "'\\''")}'`)
+    .join(" ");
+  return {
+    command: "/bin/bash",
+    args: [
+      "-lc",
+      `source "$HOME/.nvm/nvm.sh" >/dev/null 2>&1 || true; npm ${quotedArgs}`,
+    ],
+  };
 }
 
 class LocalAnchorAdapter implements AnchorAdapter {
-  async anchor(decision: DecisionResult): Promise<AnchorRecord> {
+  async anchor(decision: DecisionResult, policyVersion: number): Promise<AnchorRecord> {
     return {
       id: randomUUID(),
       network: "local-simulator",
@@ -25,6 +51,7 @@ class LocalAnchorAdapter implements AnchorAdapter {
       contractAddress: null,
       evidenceRoot: decision.evidenceRoot,
       policyCommitment: decision.policyCommitment,
+      policyVersion,
       actionCommitment: decision.actionCommitment,
       decision: decision.status,
       validUntil:
@@ -38,14 +65,14 @@ class LocalAnchorAdapter implements AnchorAdapter {
 class MidnightCliAnchorAdapter implements AnchorAdapter {
   constructor(private readonly chainDirectory: string) {}
 
-  async anchor(decision: DecisionResult): Promise<AnchorRecord> {
+  async anchor(decision: DecisionResult, policyVersion: number): Promise<AnchorRecord> {
     const configuredTimeout = Number(
-      process.env.MIDNIGHT_CLI_TIMEOUT_MS ?? 360_000,
+      process.env.MIDNIGHT_CLI_TIMEOUT_MS ?? 600_000,
     );
     const timeout =
       Number.isFinite(configuredTimeout) && configuredTimeout > 0
         ? configuredTimeout
-        : 360_000;
+        : 600_000;
     const validUntil =
       decision.permit?.expiresAt ??
       new Date(Date.now() + 15 * 60_000).toISOString();
@@ -57,28 +84,57 @@ class MidnightCliAnchorAdapter implements AnchorAdapter {
       "anchor",
       decision.evidenceRoot,
       decision.policyCommitment,
+      String(policyVersion),
       decision.actionCommitment,
       decision.status,
-      String(new Date(validUntil).getTime()),
+      String(Math.floor(new Date(validUntil).getTime() / 1_000)),
       String(decision.independentSources),
       String(decision.requiredSources),
       String(decision.contradictions.length),
     ];
+    const npm = npmInvocation(args);
 
-    const { stdout, stderr } = await execFileAsync("npm", args, {
-      cwd: path.resolve(this.chainDirectory),
-      env: process.env,
-      timeout,
-      maxBuffer: 10 * 1024 * 1024,
-    });
+    let stdout: string;
+    let stderr: string;
+    try {
+      const result = await execFileAsync(npm.command, npm.args, {
+        cwd: path.resolve(this.chainDirectory),
+        env: process.env,
+        timeout,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      stdout = result.stdout;
+      stderr = result.stderr;
+    } catch (error) {
+      const details = error as NodeJS.ErrnoException & {
+        killed?: boolean;
+        signal?: NodeJS.Signals;
+      };
+      const timedOut =
+        details.killed === true ||
+        details.signal === "SIGTERM" ||
+        details.code === "ETIMEDOUT";
+      if (timedOut) {
+        throw new MidnightAnchorError(
+          "MIDNIGHT_ANCHOR_TIMEOUT",
+          `Midnight CLI did not return an anchor result within ${Math.round(timeout / 1_000)} seconds.`,
+          timeout,
+        );
+      }
+      throw new MidnightAnchorError(
+        "MIDNIGHT_ANCHOR_FAILED",
+        "Midnight CLI failed before returning an anchor result.",
+      );
+    }
 
     const marker = stdout
       .split(/\r?\n/)
       .find((line) => line.startsWith("ANCHOR_RESULT:"));
 
     if (!marker) {
-      throw new Error(
-        `Midnight CLI did not return an anchor result.\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+      throw new MidnightAnchorError(
+        "MIDNIGHT_ANCHOR_FAILED",
+        `Midnight CLI did not return an anchor result. stdout bytes=${Buffer.byteLength(stdout)} stderr bytes=${Buffer.byteLength(stderr)}`,
       );
     }
 
@@ -97,6 +153,7 @@ class MidnightCliAnchorAdapter implements AnchorAdapter {
       contractAddress: parsed.contractAddress ?? null,
       evidenceRoot: decision.evidenceRoot,
       policyCommitment: decision.policyCommitment,
+      policyVersion,
       actionCommitment: decision.actionCommitment,
       decision: decision.status,
       validUntil,
@@ -170,7 +227,8 @@ export async function switchMidnightNetwork(
   if (!directory || (process.env.MIDNIGHT_MODE ?? "local") !== "cli") {
     throw new Error("Network switching requires MIDNIGHT_MODE=cli");
   }
-  await execFileAsync("npm", ["run", "network", "--", network], {
+  const npm = npmInvocation(["run", "network", "--", network]);
+  await execFileAsync(npm.command, npm.args, {
     cwd: directory,
     env: process.env,
     timeout: 30_000,

@@ -11,6 +11,7 @@ export enum Decision {
 struct DecisionAnchor {
   evidenceRoot: Bytes<32>,
   policyCommitment: Bytes<32>,
+  policyVersion: Uint<32>,
   actionCommitment: Bytes<32>,
   decision: Decision,
   validUntil: Uint<64>,
@@ -19,13 +20,51 @@ struct DecisionAnchor {
   contradictionCount: Uint<16>
 }
 
+export ledger registrarCommitment: Bytes<32>;
+export ledger registrarRevoked: Boolean;
+export ledger registrarEpoch: Counter;
 export ledger anchors: Map<Uint<64>, DecisionAnchor>;
 export ledger usedAllowActions: Set<Bytes<32>>;
 export ledger nextId: Counter;
 
+witness registrarSecret(): Bytes<32>;
+
+circuit deriveRegistrarCommitment(secret: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([
+    pad(32, "proofrail:registrar:v1"),
+    secret
+  ]);
+}
+
+circuit requireRegistrar(): [] {
+  const suppliedCommitment = deriveRegistrarCommitment(registrarSecret());
+  assert(registrarCommitment == suppliedCommitment, "unauthorized registrar");
+}
+
+constructor() {
+  registrarCommitment = disclose(deriveRegistrarCommitment(registrarSecret()));
+  registrarRevoked = false;
+  registrarEpoch.increment(1);
+}
+
+export circuit rotateRegistrar(nextSecret: Bytes<32>): [] {
+  requireRegistrar();
+  const nextCommitment = deriveRegistrarCommitment(nextSecret);
+  assert(registrarCommitment != nextCommitment, "registrar secret unchanged");
+  registrarCommitment = disclose(nextCommitment);
+  registrarRevoked = false;
+  registrarEpoch.increment(1);
+}
+
+export circuit revokeRegistrar(): [] {
+  requireRegistrar();
+  registrarRevoked = true;
+}
+
 export circuit registerDecision(
   evidenceRoot: Bytes<32>,
   policyCommitment: Bytes<32>,
+  policyVersion: Uint<32>,
   actionCommitment: Bytes<32>,
   decision: Decision,
   validUntil: Uint<64>,
@@ -33,10 +72,13 @@ export circuit registerDecision(
   requiredEvidenceCount: Uint<16>,
   contradictionCount: Uint<16>
 ): Uint<64> {
+  requireRegistrar();
+  assert(!registrarRevoked, "registrar is revoked");
   const publicDecision = disclose(decision);
   const publicActionCommitment = disclose(actionCommitment);
 
-  assert(validUntil > 0, "validity must be positive");
+  assert(policyVersion > 0, "policy version must be positive");
+  assert(blockTimeLt(disclose(validUntil)), "decision validity has expired");
   assert(requiredEvidenceCount > 0, "evidence is required");
 
   if (publicDecision == Decision.ALLOW) {
@@ -54,6 +96,7 @@ export circuit registerDecision(
     DecisionAnchor {
       evidenceRoot: disclose(evidenceRoot),
       policyCommitment: disclose(policyCommitment),
+      policyVersion: disclose(policyVersion),
       actionCommitment: publicActionCommitment,
       decision: publicDecision,
       validUntil: disclose(validUntil),

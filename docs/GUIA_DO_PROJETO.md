@@ -64,7 +64,7 @@ Para uma decisão `ALLOW`, o contrato rejeita evidência insuficiente, contradi�
 O site foi separado para não misturar explicação com operação:
 
 - **Visão geral:** é a apresentação do produto. Explica o problema, o exemplo de documento falso, as cinco etapas, quem usa cada parte e onde a Midnight entra.
-- **Demonstração:** é o laboratório. Primeiro aparece o botão **Rodar trilha completa** para o pitch; abaixo ficam cenários e controles manuais para aprender ou investigar cada etapa.
+- **Demonstração:** mostra o produto em operação. Primeiro aparece **Verificar evidências**; abaixo ficam cenários e controles manuais para aprender ou investigar cada decisão.
 
 O fluxo visual das duas telas é:
 
@@ -87,7 +87,7 @@ A trilha de auditoria não é o painel operacional principal de quem solicita a 
 
 ### O que significam os botões das fontes
 
-No laboratório, você controla manualmente respostas que em produção viriam de ERP, IAM, CI, cadastro ou outro sistema:
+Na demonstração, você controla respostas que em uma integração externa viriam de ERP, IAM, CI, cadastro ou outro sistema:
 
 - **Simular confirmação:** a origem confiável confirma o fato esperado.
 - **Simular conflito:** a origem responde com valor ou estado divergente; a política deve bloquear a ação.
@@ -121,7 +121,7 @@ O fluxo foi novamente validado na devnet local em 19/07/2026: um documento autod
 
 ## Teste automático para apresentação
 
-O botão **Rodar trilha completa**, no início da demonstração, existe para o pitch e para representar uma integração empresarial.
+O botão **Verificar evidências**, no início da demonstração, coleta as fontes técnicas e aplica a política. Quando a política exige revisão independente, o fluxo para em `REVIEW_REQUIRED` sem emitir permit.
 
 Ele faz numa única chamada:
 
@@ -307,10 +307,10 @@ Durante a validação, a inicialização detectou `node_modules` instalado pelo 
 - não há login, papéis de usuário nem KMS/HSM;
 - o armazenamento é JSON, não banco transacional;
 - a API foi restringida ao localhost, mas não está pronta para exposição pública;
-- o contrato ainda não restringe qual identidade pode chamar `registerDecision`;
+- `registerDecision` exige o witness do registrador autorizado, mas esse segredo ainda fica em arquivo local e precisa migrar para KMS/HSM antes de produção;
 - o circuito valida contagens, contradições e replay de `ALLOW`, porém ainda recebe do backend o resumo da decisão;
 - não existe ainda uma prova Compact completa de cada assinatura, frescor e regra privada;
-- Testnet e Preprod exigem carteira financiada pelo faucet e implantação separada.
+- Testnet e Preprod usam carteiras financiadas e implantações separadas; ambas passaram E2E e matriz negativa pública.
 - o webhook HTTPS público GitHub -> API ainda precisa ser validado antes de
   exposição fora do localhost.
 
@@ -323,6 +323,6 @@ Durante a validação, a inicialização detectou `node_modules` instalado pelo 
 5. Tornar coleta, decisão e execução idempotentes e resilientes a falhas.
 6. Adicionar rollback do destino real e validação pública do webhook HTTPS.
 7. Criar testes automatizados de API, frontend, MCP, contrato e ponta a ponta.
-8. Implantar e repetir os testes negativos em Preview e Preprod.
+8. Manter E2E e testes negativos como regressão obrigatória em Preview e Preprod.
 
 Para instalação detalhada, use [`SETUP_WINDOWS.md`](SETUP_WINDOWS.md). Para entender cada pasta e arquivo, use [`ARCHITECTURE.md`](ARCHITECTURE.md). Para os limites criptográficos e a evolução até produção, use [`MIGRACAO_MIDNIGHT.md`](MIGRACAO_MIDNIGHT.md).

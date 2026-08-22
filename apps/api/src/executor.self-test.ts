@@ -3,6 +3,7 @@ import {
   ExecutionNotAllowedError,
   ExecutorConfigSchema,
   GitHubWorkflowExecutor,
+  __test,
   type StagingDispatch,
 } from "./executor";
 
@@ -67,6 +68,15 @@ assert.deepEqual(
 );
 assert.doesNotMatch(JSON.stringify(receivedBody), /executor-test-token/);
 assert.match(result.externalReference, /actions\/runs\/909$/);
+
+if (process.platform !== "win32") {
+  assert.equal(
+    __test.normalizeConfigPath(
+      "C:\\dev\\rational-gate\\data\\private\\executor.json",
+    ),
+    "/mnt/c/dev/rational-gate/data/private/executor.json",
+  );
+}
 
 assert.throws(
   () =>
