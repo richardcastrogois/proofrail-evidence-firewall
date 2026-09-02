@@ -138,12 +138,15 @@ execution adapter.
 
 ## Documentation
 
-- [Product guide](docs/GUIA_DO_PROJETO.md)
+- [Product pitch](docs/PITCH.md)
+- [Developer onboarding](docs/DEVELOPER_ONBOARDING.md)
+- [Local state and secrets](docs/LOCAL_STATE_AND_SECRETS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security model](docs/SEGURANCA.md)
 - [GitHub App connector](docs/GITHUB_APP.md)
-- [Midnight integration](docs/MIGRACAO_MIDNIGHT.md)
+- [Midnight integration](docs/MIDNIGHT.md)
 - [Windows setup](docs/SETUP_WINDOWS.md)
+- [Deployment and next steps](docs/DEPLOYMENT_AND_NEXT_STEPS.md)
 - [Documentation index](docs/README.md)
 
 ## Run locally
@@ -208,5 +211,5 @@ wsl -d Ubuntu -- bash -lc "source ~/.nvm/nvm.sh && cd /mnt/c/dev/rational-gate/m
 ```
 
 Preview and Preprod require separate public wallets, faucet funding, contracts,
-and validation. Follow [Windows setup](docs/SETUP_WINDOWS.md) and the
-[Preprod operations runbook](docs/ETAPA_04_PREPROD_OPERACAO.md).
+and validation. Follow [Windows setup](docs/SETUP_WINDOWS.md) and
+[Midnight integration](docs/MIDNIGHT.md).

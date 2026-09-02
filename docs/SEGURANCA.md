@@ -26,7 +26,7 @@ Agente não confiável
 
 O agente nunca deve controlar a credencial do orquestrador, a resposta das fontes, a chave do aprovador, a política, o registrador do contrato ou a implementação do executor.
 
-## Controles implementados nos Incrementos 03.1 a 03.3
+## Controles de autenticação e execução
 
 Os contratos abaixo são aplicados nas rotas e cobertos por testes negativos.
 A API continua restrita a localhost porque identidade corporativa e rate limit
@@ -47,11 +47,10 @@ distribuído permanecem fora do recorte.
 | Credencial de leitura ganha escrita | GitHub App de CI permanece `Actions: read`; dispatch usa token separado e restrito |
 | Corrida consome o permit duas vezes | fila transacional do store local reserva por permit/request antes de chamar o provedor |
 
-O contrato completo e a matriz de rotas estão em
-[`ETAPA_03_CONTRATOS.md`](ETAPA_03_CONTRATOS.md). Esses controles provam o
-recorte local; não tornam o JSON store seguro para múltiplas instâncias.
+Os contratos de rota e a matriz negativa estão no código da API. Esses controles
+provam o recorte local; não tornam o JSON store seguro para múltiplas instâncias.
 
-## Controles implementados no Dia 01
+## Controles de evidência e política
 
 | Ameaça | Controle atual |
 |---|---|
@@ -69,7 +68,7 @@ recorte local; não tornam o JSON store seguro para múltiplas instâncias.
 | Replay | permit é de uso único e segunda chamada retorna `409` |
 | Exposição de evidência na cadeia | somente commitments, contagens e decisão são ancorados |
 
-## Controles implementados no Dia 02
+## Controles do conector GitHub CI
 
 | Ameaça | Controle atual |
 |---|---|
@@ -89,7 +88,7 @@ recorte local; não tornam o JSON store seguro para múltiplas instâncias.
 
 O recibo de CI é assinado pelo adaptador Proofrail **depois** de consultar o GitHub. Essa assinatura prova o que o conector verificou; não deve ser descrita como uma assinatura nativa do GitHub sobre o recibo.
 
-## Controles implementados na Etapa 04
+## Controles on-chain e validação
 
 | Ameaça | Controle atual |
 |---|---|
@@ -108,8 +107,8 @@ O recibo de CI é assinado pelo adaptador Proofrail **depois** de consultar o Gi
 As matrizes de fechamento passaram em 10/10 nos ambientes Local, Preview e
 Preprod: registrador não autorizado, evidência insuficiente, contradição,
 expiração, caminho autorizado, replay, rotação, rejeição da chave anterior,
-revogação e recuperação. Endereços e transações públicas ficam registrados no
-runbook da Etapa 04.
+revogação e recuperação. Consulte [MIDNIGHT.md](MIDNIGHT.md) para operação nas
+redes e o endereço público de validação.
 
 ## Riscos críticos ainda abertos
 
@@ -173,11 +172,11 @@ verificação crítica de assinaturas e regras hoje resumidas pelo backend.
 
 ## Veredito atual
 
-Os incrementos 03.1–03.4 acrescentam autenticação local, aprovação humana
-assinada, separação de credenciais, ancoragem Preview e execução staging
-idempotente com GitHub Actions real. Ainda não resolvem identidade
-empresarial, custódia profissional, todos os conectores, registrador on-chain,
-banco distribuído, rollback, webhook HTTPS público ou destino real de
+O produto possui autenticação local, aprovação humana assinada, separação de
+credenciais, ancoragem em redes públicas de teste e execução staging idempotente
+com GitHub Actions real. Ainda não resolve identidade empresarial, custódia
+profissional, todos os conectores, verificação on-chain completa das assinaturas
+e da política, banco distribuído, rollback, webhook HTTPS público ou destino real de
 hospedagem. A carteira Preview, DUST, contrato, escrita positiva, negativos
 on-chain, CI real, dispatch staging real e replay bloqueado foram validados em
-19/08/2026. A versão não deve ser exposta como serviço de produção.
+ambientes de teste. A versão não deve ser exposta como serviço de produção.
