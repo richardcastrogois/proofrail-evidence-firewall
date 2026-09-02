@@ -61,7 +61,8 @@ O navegador nunca fala diretamente com a blockchain. Ele chama a API. A API cole
 - banco transacional, filas, idempotência distribuída e alta disponibilidade;
 - prova Compact completa das assinaturas e regras privadas;
 - execução real em banco, CI/CD, seguradora ou ferramenta empresarial.
-- autorização on-chain de quem pode chamar `registerDecision`; o contrato atual ainda não possui registrador restrito.
+- implantação de custódia profissional para a chave registradora e a operação
+  do worker de ancoragem fora do ambiente local.
 
 ## Mapa de pastas e arquivos
 
@@ -85,15 +86,12 @@ Arquivos gerados dentro de `node_modules`, `dist` e `midnight-chain/contracts/ma
 | Arquivo | Responsabilidade |
 |---|---|
 | `docs/README.md` | Índice e ordem de leitura recomendada. |
-| `docs/GUIA_DO_PROJETO.md` | Explicação didática, fluxo de cliques, cenários e estado atual. |
 | `docs/SETUP_WINDOWS.md` | Instalação, comandos de verificação e execução Windows/WSL. |
 | `docs/ARCHITECTURE.md` | Este mapa técnico e as fronteiras de confiança. |
 | `docs/SEGURANCA.md` | Modelo de ameaças, controles implementados e riscos P0/P1. |
-| `docs/MIGRACAO_MIDNIGHT.md` | Garantias reais, limitações e roteiro para uma migração completa. |
+| `docs/MIDNIGHT.md` | Contrato, garantias, limitações e operação nas redes Midnight. |
 | `docs/GITHUB_APP.md` | Configuração segura do primeiro conector real de CI. |
-| `docs/ETAPA_03_CONTRATOS.md` | Atores, scopes, aprovação assinada, idempotência, estados e erros definidos antes das rotas da Etapa 03. |
-| `docs/PLANO_4_DIAS.md` | Plano operacional, critérios de aceite e estado dos incrementos. |
-| `docs/REPOSITORIO_PRIVADO_GRATUITO.md` | Fluxo GitLab principal, GitHub espelho, proteção de branch e CI. |
+| `docs/DEPLOYMENT_AND_NEXT_STEPS.md` | Estado confirmado, arquitetura-alvo e plano de continuidade. |
 
 Diretórios como `.codex/`, `.agents/`, `.vscode/`, `data/private/` e `midnight-chain/` são estado local ou gerado e não fazem parte do repositório público.
 
@@ -118,7 +116,7 @@ Diretórios como `.codex/`, `.agents/`, `.vscode/`, `data/private/` e `midnight-
 | `apps/api/tsconfig.json` | Configuração TypeScript da API. |
 | `apps/api/src/server.ts` | Inicializa Fastify, restringe CORS ao localhost, define limites e registra rotas. |
 | `apps/api/src/routes.ts` | Endpoints, validação Zod, registro de documento autodeclarado, avaliação, âncora, permit, execução, reset e lifecycle. |
-| `apps/api/src/access-control.ts` | Matriz declarativa de autenticação e menor scope por rota; definida no Incremento 03.1 e aplicada a partir do 03.2. |
+| `apps/api/src/access-control.ts` | Matriz declarativa de autenticação e menor scope por rota. |
 | `apps/api/src/day03-contracts.self-test.ts` | Testes negativos dos contratos de principal, aprovação, execução, idempotência, erros e matriz de rotas. |
 | `apps/api/src/service-auth.ts` | Autenticação bearer em tempo constante, cadastro confiável de principals/aprovadores e enforcement da matriz de scopes. |
 | `apps/api/src/service-auth-init.ts` | Gera configuração local separando hashes/chaves públicas dos segredos de cliente, sem imprimir credenciais. |

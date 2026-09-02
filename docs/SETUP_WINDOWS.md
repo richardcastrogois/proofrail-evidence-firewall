@@ -219,9 +219,10 @@ wsl -d Ubuntu -- bash -lc "source ~/.nvm/nvm.sh && cd /mnt/c/dev/rational-gate &
 wsl -d Ubuntu -- bash -lc "source ~/.nvm/nvm.sh && cd /mnt/c/dev/rational-gate && npm run build"
 ```
 
-Esses testes agora incluem o motor das nove políticas e a matriz criptográfica do conector GitHub do Dia 02. Eles não substituem o teste contra um repositório real.
+Esses testes incluem o motor das nove políticas e a matriz criptográfica do
+conector GitHub. Eles não substituem o teste contra um repositório real.
 
-Se esta pasta já foi usada antes do Dia 02, migre uma vez o store antigo antes de reiniciar:
+Se esta pasta já tiver um store legado, migre-o uma vez antes de reiniciar:
 
 ```powershell
 wsl -d Ubuntu -- bash -lc "source ~/.nvm/nvm.sh && cd /mnt/c/dev/rational-gate && npm run store:migrate --workspace @rational/api"
@@ -271,7 +272,8 @@ Invoke-RestMethod http://127.0.0.1:3333/api/health
 7. Destrua as chaves e confirme que os dados brutos acessíveis caem para zero.
 8. Para uma apresentação curta, reinicie e use `Verificar evidências`.
 
-O tutorial de cliques e o significado de cada retorno estão em `GUIA_DO_PROJETO.md`.
+O comportamento do produto e seus limites estão no [README da raiz](../README.md)
+e em [Arquitetura](ARCHITECTURE.md).
 
 ## 5. Adicionar a integração Midnight
 
@@ -456,7 +458,11 @@ Get-NetTCPConnection -LocalPort 6300 -ErrorAction SilentlyContinue
 
 Os scripts de inicialização agora recusam abrir uma segunda cópia quando `3333` ou `5173` já estão ocupadas. Volte ao PowerShell que está exibindo `[API]` e `[WEB]`, pressione `Ctrl+C` e só então inicie novamente.
 
-Se o navegador continuar mostrando oito cenários ou o antigo fluxo de pagamento, a porta `5173` está servindo uma instância anterior. Não valide essa tela: encerre o terminal antigo com `Ctrl+C`, confirme que as portas foram liberadas com os comandos acima e execute novamente o script de inicialização. A versão do Dia 01 inicia em **Agente + Deploy** e mostra **9 políticas**.
+Se o navegador continuar mostrando oito cenários ou o antigo fluxo de pagamento,
+a porta `5173` está servindo uma instância anterior. Não valide essa tela:
+encerre o terminal antigo com `Ctrl+C`, confirme que as portas foram liberadas
+com os comandos acima e execute novamente o script de inicialização. A versão
+atual inicia em **Agente + Deploy** e mostra **9 políticas**.
 
 ### As animações não aparecem
 

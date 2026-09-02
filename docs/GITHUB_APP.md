@@ -1,4 +1,4 @@
-# Conector real GitHub App — Dia 02
+# Conector GitHub App
 
 Este conector substitui **somente a evidência Pipeline CI** do cenário
 `agent_deploy`. Identidade corporativa, política de ferramenta e scanner ainda
@@ -86,7 +86,9 @@ O `.env`, `data/private` e o estado da carteira estão no `.gitignore`. Não cop
 
 ## 4. Iniciar e conferir o estado
 
-Se o projeto já estava aberto antes de aplicar o Dia 02, volte ao PowerShell que o iniciou, pressione `Ctrl+C` uma vez e execute novamente o comando abaixo. Uma API antiga continua respondendo, mas ainda não conhece `integrations.github`.
+Se o projeto já estava aberto antes de configurar o conector, volte ao PowerShell
+que o iniciou, pressione `Ctrl+C` uma vez e execute novamente o comando abaixo.
+Uma API anterior pode continuar respondendo sem conhecer `integrations.github`.
 
 Antes do primeiro reinício, você também pode executar explicitamente a migração segura do estado:
 
@@ -109,7 +111,9 @@ $state.integrations.github | Format-List
 
 O esperado é `configured: True`. Se for `False`, `missingConfiguration` mostra apenas os nomes das variáveis ausentes, nunca seus valores.
 
-Na tela **Demonstração**, o cartão “Integração do Dia 02” também mostra o estado. Os botões “Simular confirmação/conflito” continuam deliberadamente didáticos; o conector real é chamado por API ou MCP.
+Na tela **Demonstração**, o cartão de integração também mostra o estado. Os
+botões “Simular confirmação/conflito” continuam deliberadamente didáticos; o
+conector real é chamado por API ou MCP.
 
 ## 5. Preparar e assinar uma ação real
 
