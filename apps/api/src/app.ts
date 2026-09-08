@@ -41,7 +41,10 @@ export async function createProofrailApi() {
   });
 
   await app.register(cors, {
-    origin: (origin, callback) => {
+    origin: (
+      origin: string | undefined,
+      callback: (error: Error | null, allowed: boolean) => void,
+    ) => {
       if (isAllowedBrowserOrigin(origin)) {
         callback(null, true);
         return;
