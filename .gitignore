@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-vercel/
 .vite/
 coverage/
 
@@ -41,3 +42,6 @@ midnight-chain/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+.vercel
+.env*

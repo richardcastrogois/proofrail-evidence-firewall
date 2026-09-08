@@ -25,7 +25,7 @@ import {
   verifyEvidenceReceipt,
 } from "@rational/core";
 import { z } from "zod";
-import { JsonStore, actionForScenario, auditEvent } from "./store";
+import { actionForScenario, auditEvent, type ProofrailStore } from "./store";
 import {
   createGitHubCiEvidence,
   createApprovalEvidence,
@@ -64,6 +64,7 @@ import {
   type StagingDispatch,
   type StagingExecutor,
 } from "./executor";
+import { isLimitedPublicApiMode } from "./runtime-config";
 
 const CollectEvidenceSchema = z.object({
   sourceId: z.string().trim().min(1).max(120),
@@ -444,11 +445,22 @@ function expireRequestEvidence(database: Database, requestId: string): number {
 
 export async function registerRoutes(
   app: FastifyInstance,
-  store: JsonStore,
+  store: ProofrailStore,
   serviceAuthenticator: ServiceAuthenticator,
   stagingExecutor: StagingExecutor = new DisabledStagingExecutor(),
 ): Promise<void> {
   registerServiceAuthentication(app, serviceAuthenticator);
+  const limitedPublicApi = isLimitedPublicApiMode();
+
+  function workerUnavailable(request: FastifyRequest, reply: FastifyReply) {
+    return sendApiError(
+      request,
+      reply,
+      503,
+      "ANCHOR_UNAVAILABLE",
+      "This public API is running in limited mode. Midnight anchoring, network switching, approvals and execution require the asynchronous worker.",
+    );
+  }
 
   async function evaluateAndPersist(action: ProposedAction, request?: FastifyRequest) {
     const database = await store.read();
@@ -562,6 +574,7 @@ export async function registerRoutes(
   app.get("/api/health", async () => ({
     ok: true,
     service: "proofrail-api",
+    apiMode: limitedPublicApi ? "limited" : "full",
     mode: process.env.MIDNIGHT_MODE ?? "local",
     network: (await getNetworkStatus()).active,
   }));
@@ -768,7 +781,8 @@ export async function registerRoutes(
     return publicState(database);
   });
 
-  app.post("/api/network/select", async (request) => {
+  app.post("/api/network/select", async (request, reply) => {
+    if (limitedPublicApi) return workerUnavailable(request, reply);
     const { network } = z.object({ network: NetworkIdSchema }).parse(request.body);
     const status = await switchMidnightNetwork(network);
     await store.update((database) => {
@@ -824,6 +838,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/evidence/collect", async (request, reply) => {
+    if (limitedPublicApi) return workerUnavailable(request, reply);
     const input = CollectEvidenceSchema.parse(request.body);
     const configuredOrigin = (await store.read()).origins.find(
       (entry) =>
@@ -872,6 +887,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/evaluate", async (request, reply) => {
+    if (limitedPublicApi) return workerUnavailable(request, reply);
     try {
       return await evaluateAndPersist(
         ProposedActionSchema.parse(request.body),
@@ -886,6 +902,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/approvals", async (request, reply) => {
+    if (limitedPublicApi) return workerUnavailable(request, reply);
     try {
       const input = CreateApprovalRequestSchema.parse(request.body);
       const principal = request.servicePrincipal;
@@ -1101,6 +1118,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/simulation/run", async (request, reply) => {
+    if (limitedPublicApi) return workerUnavailable(request, reply);
     try {
       const action = ProposedActionSchema.parse(request.body);
       const originKeys = new Map<string, string>();
@@ -1162,6 +1180,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/execute", async (request, reply) => {
+    if (limitedPublicApi) return workerUnavailable(request, reply);
     try {
       const { permitId } = ExecutePermitRequestSchema.parse(request.body);
       const idempotencyKey = IdempotencyKeySchema.parse(

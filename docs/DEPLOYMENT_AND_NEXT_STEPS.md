@@ -35,12 +35,22 @@ proposta.
 
 ### Limites atuais
 
-- A API, a interface, o store e os segredos estao locais.
-- O armazenamento e JsonStore, adequado para demonstracao e nao para
-  concorrencia, retencao ou auditoria empresarial.
-- Nao ha autenticacao corporativa, banco transacional, fila duravel, worker
-  persistente, gestao de chaves por KMS/HSM, rate limiting, observabilidade
-  centralizada, destino de deploy real ou SLA.
+- A interface esta publicada na Vercel com API publica limitada em `/api/*`.
+  A API completa ainda nao foi publicada.
+- O projeto Vercel `proofrail` existe e esta conectado ao Neon
+  `proofrail-dev-sp`.
+- Deployment atual:
+  `https://proofrail-juaug0uys-richard-castro-gois-projects.vercel.app`
+  com alias `https://proofrail-nu.vercel.app`.
+- O Neon `proofrail-dev-sp` esta na organizacao Vercel, regiao
+  `aws-sa-east-1`, plano Free, PostgreSQL 18, com a primeira migracao Prisma
+  aplicada.
+- O `JsonStore` continua sendo o padrao local. `PROOFRAIL_STORE=postgres`
+  habilita o adapter PostgreSQL inicial, que grava o snapshot versionado em
+  `ProofrailState` e mantem segredos privados fora do banco.
+- Nao ha autenticacao corporativa, tabelas de dominio plenamente normalizadas,
+  fila duravel, worker persistente, gestao de chaves por KMS/HSM, rate
+  limiting, observabilidade centralizada, destino de deploy real ou SLA.
 - Preview e Preprod sao redes de teste. Mainnet esta fora do escopo.
 
 Esses limites devem aparecer com transparencia em qualquer apresentacao
@@ -51,17 +61,19 @@ empresarial hospedada pronta para producao.
 
 | Decisao | Estado | Motivo |
 | --- | --- | --- |
-| Vercel para interface publica e APIs curtas | definida, nao implantada | entrega web simples, CDN e deploy integrado ao Git |
-| Neon PostgreSQL com Prisma | definida, nao implantada | dados transacionais, migracoes e historico de auditoria |
-| Worker Midnight persistente em Docker | obrigatorio antes do deploy publico | carteira, sync, proof server e dados de prova nao cabem em funcao serverless |
+| Vercel para interface publica e APIs curtas | frontend e API limitada publicados | entrega web simples, CDN e deploy integrado ao Git |
+| Neon PostgreSQL com Prisma | criado em desenvolvimento | dados transacionais, migracoes e historico de auditoria |
+| Executor Midnight isolado | decisao pendente entre VM persistente e job sob demanda | ambos exigem fila, idempotencia, segredos isolados e proof server nao publico |
 | Fila duravel entre API e worker | obrigatoria antes do deploy publico | ancoragem e longa e nao pode bloquear o navegador |
-| Oracle Cloud Always Free como candidato ao worker | hipotese a validar | pode oferecer VM persistente sem custo inicial, mas capacidade e disponibilidade precisam ser comprovadas |
+| Oracle Cloud Always Free como candidato a VM | bloqueado por capacidade em Sao Paulo | atende ao envelope medido, mas nao pode ser dependencia do cronograma |
+| Job sob demanda como alternativa | hipotese a prototipar localmente | evita processo ocioso, mas exige restauracao de estado e nao elimina o pico de memoria |
 | Preprod como rede publica de validacao | ativo | permite provar a integracao sem custo de mainnet |
 | Mainnet | nao planejada | so avaliar depois de operacao, custodia, observabilidade e suporte definidos |
 
-Vercel, Neon e Prisma nao substituem o worker Midnight. Funcoes serverless sao
-efemeras e tem limites de duracao; o worker precisa de volume persistente para
-carteira e sincronizacao, proof server local e conexao de rede estavel.
+Vercel, Neon e Prisma nao substituem o executor Midnight. Uma funcao Vercel
+continua inadequada para a operacao longa. O executor pode ser uma VM
+persistente ou um job com duracao suficiente, desde que o job restaure o estado
+privado da carteira, seja idempotente e mantenha o proof server interno.
 
 ## Arquitetura-alvo
 
@@ -73,9 +85,9 @@ Vercel: interface e API curta
     |                     \\
     |                      -> Neon PostgreSQL via Prisma
     v
-Fila duravel -> worker Midnight persistente em Docker
+Fila duravel -> executor Midnight isolado (VM ou job)
                    |       |
-                   |       -> proof server local, nunca publico
+                   |       -> proof server interno, nunca publico
                    v
               Midnight Preprod
 ~~~
@@ -96,60 +108,95 @@ Midnight. Segredos de carteira e registrador ficam somente no worker.
 
 ## Plano de entregas
 
-### Entrega 0: validar hospedagem do worker
+### Entrega 0: fundacao de frontend e dados
 
-Objetivo: provar que uma VM persistente executa Midnight antes de migrar a
-aplicacao.
+Estado: iniciada. Em 2026-09-02, o projeto Vercel `proofrail` foi criado e o
+Neon `proofrail-dev-sp` foi provisionado em Sao Paulo via integracao Vercel.
+O frontend e a API publica limitada foram publicados na Vercel.
 
-1. Criar a VM candidata, preferencialmente Oracle Always Free ARM se houver
-   recursos disponiveis na regiao.
-2. Instalar Docker e executar a imagem do proof server usada pelo projeto.
-3. Criar volume persistente para dados de carteira e sincronizacao.
-4. Executar health check, sync de carteira Preprod e uma ancora de teste.
-5. Medir memoria, disco, tempo de sync frio e quente, prova e confirmacao.
-6. Documentar custo real, limites de conta e recuperacao.
+1. `vercel.json` publica o bundle Vite e uma Vercel Function curta em `/api/*`.
+   Sem `VITE_API_URL`, a interface renderiza um preview frontend-only e bloqueia
+   acoes de backend.
+2. `packages/database/prisma` define o contrato PostgreSQL/Neon e a primeira
+   migracao, incluindo estado de transicao, entidades de dominio, auditoria e
+   operacoes assincronas.
+3. `npm run deploy:preflight` bloqueia a API publica sem `DATABASE_URL`,
+   `PROOFRAIL_STORE=postgres` e `PROOFRAIL_PUBLIC_ORIGINS`. Antes do worker,
+   a API so pode passar em `PROOFRAIL_PUBLIC_API_MODE=limited`, que recusa
+   ancoragem Midnight, aprovacao, troca de rede e execucao com `503`.
+4. A API usa `JsonStore` por padrao. O adapter PostgreSQL inicial pode ser
+   ativado com `PROOFRAIL_STORE=postgres`; a evolucao para tabelas normalizadas
+   deve preservar os testes e separar os segredos do banco de dados.
 
-Aceite: uma ancora Preprod concluida no worker apos reinicio, com dados
-persistidos e proof server inacessivel publicamente.
+Aceite: schema validado, migracao aplicada em um Neon de desenvolvimento,
+adapter PostgreSQL inicial validado, frontend publicado e API limitada
+respondendo em Vercel com `apiMode=limited`. Isso nao inclui ancoragem
+Midnight publica.
 
-Nao compre plano pago nem envie a carteira ao faucet novamente sem necessidade.
-Primeiro valide compatibilidade da VM e disponibilidade de capacidade.
+Antes de qualquer publicacao, execute `npm run deploy:preflight`. Para validar
+somente o frontend Vercel, execute
+`node scripts/deploy-preflight.mjs --target=vercel-static`. `VITE_API_URL` e
+opcional nessa etapa; quando ausente, a interface deve permanecer em modo
+frontend-only.
 
-### Entrega 1: persistencia e contratos de dados
+Para validar uma API hospedada antes do worker, use somente o modo limitado:
+`PROOFRAIL_PUBLIC_API_MODE=limited`, `PROOFRAIL_STORE=postgres`,
+`PROOFRAIL_PUBLIC_ORIGINS` com os dominios Vercel permitidos e
+`MIDNIGHT_MODE=local`. Esse modo permite leitura de estado, selecao de cenario
+e declaracoes publicas controladas; ele bloqueia avaliacao, simulacao,
+aprovacao, troca de rede, coleta assinada por origem e execucao. A API completa
+segue bloqueada por projeto ate a fronteira publica, CORS, autenticacao e
+worker assincrono estarem definidos.
 
-1. Criar Neon PostgreSQL e repositorio Prisma.
-2. Modelar organizacoes, usuarios, agentes, politicas, acoes, evidencias,
-   decisoes, permits, execucoes, ancoras e operacoes assincronas.
-3. Definir idempotencia, transacoes e retencao.
-4. Migrar JsonStore por adaptacao incremental, preservando testes.
-5. Separar evidencia auditavel de payload bruto e manter commitments/Merkle
-   roots como referencia de integridade.
+### Entrega 1: migrar persistencia e contratos de dados
+
+1. Evoluir o adapter PostgreSQL inicial para cobrir testes de concorrencia e
+   reinicio usando o snapshot versionado em `ProofrailState`.
+2. Planejar a normalizacao progressiva para tabelas de dominio, sem migrar
+   arquivos de segredos para o banco.
+3. Definir idempotencia, transacoes, retencao e cofre de segredos.
+4. Criar testes de concorrencia, reinicio e rollback da migracao.
 
 Aceite: duas requisicoes concorrentes nao emitem ou consomem o mesmo permit; a
 auditoria pode ser consultada apos reinicio.
 
-### Entrega 2: worker e fila
+### Entrega 2: aplicar controles de API publica completa
 
-1. Definir interface de fila e operacao duravel.
-2. Implementar worker Docker com health check, backoff e limite de concorrencia.
-3. Mover carteira, proof server e CLI para o worker.
-4. Criar timeouts por etapa e recuperacao segura de operacao interrompida.
-5. Publicar metricas de sync, prova, submissao, confirmacao e falha.
-
-Aceite: a API responde em segundos; a interface acompanha estados reais; uma
-operacao pode ser retomada sem duplicar registro on-chain.
-
-### Entrega 3: aplicacao publica controlada
-
-1. Configurar Vercel, variaveis por ambiente e dominio.
-2. Conectar Neon com pooling e Prisma.
-3. Configurar autenticacao organizacional, papeis e escopo por tenant.
-4. Adicionar rate limiting, CORS restritivo, cabecalhos de seguranca,
-   validacao de origem de webhook e logs estruturados.
-5. Manter a interface clara sobre Local, Preview e Preprod nao serem producao.
+1. Evoluir a API hospedada alem do modo limitado somente depois de definir
+   autenticacao, fila e worker.
+2. Restringir CORS por `PROOFRAIL_PUBLIC_ORIGINS`, configurar autenticacao
+   organizacional, papeis e escopo por tenant.
+3. Adicionar rate limiting, cabecalhos de seguranca, validacao de origem de
+   webhook e logs estruturados.
+4. Manter chamadas Midnight indisponiveis na API hospedada ate o worker ser
+   ativado.
 
 Aceite: nenhuma chave de carteira, PEM, endpoint de proof server ou arquivo de
 estado esta no bundle, log publico ou variavel de cliente.
+
+### Entrega 3: worker Midnight e fila (executar por ultimo)
+
+Objetivo: provar o executor Midnight em ambiente limitado antes de escolher ou
+criar infraestrutura cloud.
+
+1. Implementar o consumidor de `AsyncOperation` separado da API publica.
+2. Empacotar Node, carteira e proof server para medir o conjunto inteiro.
+3. Executar o fluxo com limite total de 2 GB/1 CPU e depois 4 GB/2 CPUs.
+4. Testar sincronizacao fria e quente, reinicio, idempotencia e dez operacoes.
+5. Se 2 GB reprovar, adotar 4 GB como piso do hackathon sem novos testes de
+   provedor menor.
+6. Comparar VM persistente e job sob demanda quanto a estado, timeout, segredo,
+   disponibilidade, cota e risco de cobranca.
+7. Criar infraestrutura somente depois da escolha documentada. Oracle A1 pode
+   ser usada se houver capacidade; job com billing nao deve ser criado sem
+   autorizacao explicita e limite de custo.
+
+Aceite: dez ancoras Preprod concluidas no menor perfil saudavel, incluindo
+retomada apos reinicio sem duplicacao, com segredos persistidos de forma privada
+e proof server inacessivel publicamente.
+
+Nao compre plano pago nem envie a carteira ao faucet novamente sem necessidade.
+Primeiro valide compatibilidade da VM e disponibilidade de capacidade.
 
 ### Entrega 4: operacao e seguranca
 
@@ -183,17 +230,18 @@ fechado, matriz negativa e trilha de auditoria.
 
 Leia nesta ordem:
 
-1. [README da raiz](../README.md);
-2. [Arquitetura](ARCHITECTURE.md);
-3. [Seguranca](SEGURANCA.md);
-4. este documento;
-5. [Integracao Midnight](MIDNIGHT.md).
+1. [Ponto de partida do hackathon](HACKATHON_START_HERE.md);
+2. [Onboarding](DEVELOPER_ONBOARDING.md);
+3. [Arquitetura](ARCHITECTURE.md);
+4. [Seguranca](SEGURANCA.md);
+5. este documento;
+6. [Benchmark Midnight](MIDNIGHT_RESOURCE_BENCHMARK.md).
 
 Em seguida:
 
 1. confirme git status --short --branch e nao reverta mudancas locais;
 2. confirme quais contas ja existem: Vercel, Neon e Oracle;
-3. escolha e valide a VM do worker antes de migrar dados ou expor a aplicacao;
+3. valide o adapter PostgreSQL e escolha a VM do worker antes de expor a API;
 4. nao rode faucet, deploy publico ou escrita on-chain sem confirmacao explicita;
 5. nao prometa producao, SLA, mainnet ou integracao empresarial enquanto os
    criterios deste documento nao forem concluidos.
@@ -203,7 +251,7 @@ Em seguida:
 - [ ] Conta e regiao candidatas para worker identificadas.
 - [ ] Compatibilidade Docker/proof server validada na VM.
 - [ ] Volume persistente e backup definidos.
-- [ ] Neon e Prisma modelados com migracoes revisadas.
+- [x] Neon e Prisma modelados com migracao inicial aplicada em desenvolvimento.
 - [ ] Fila e operacao assincrona implementadas.
 - [ ] Segredos separados por ambiente e fora de Vercel/browser.
 - [ ] Autenticacao, autorizacao por tenant e rate limiting implementados.

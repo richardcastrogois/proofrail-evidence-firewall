@@ -136,8 +136,45 @@ should connect its own identity provider, scanner, transactional database,
 KMS/HSM, observability, rate limiting, rollback, and destination-specific
 execution adapter.
 
+## Hosted deployment
+
+The repository contains the deployment foundation for a public frontend and a
+limited public API:
+
+- `vercel.json` publishes the Vite web application and a short Vercel Function
+  under `/api/*`;
+- `packages/database/prisma` contains the PostgreSQL/Neon data contract and
+  first migration;
+- `PROOFRAIL_STORE=postgres` enables the PostgreSQL state adapter while keeping
+  signing secrets outside the database;
+- when `VITE_API_URL` is absent, the browser bundle renders a frontend-only
+  preview and refuses backend actions;
+- when `VITE_API_URL=.` and `VITE_PROOFRAIL_API_MODE=limited`, the browser uses
+  the same Vercel deployment for read-only state and safe public declarations;
+- `npm run deploy:preflight` refuses API publication until public origins and
+  PostgreSQL are configured. The API can only be published before the worker in
+  `PROOFRAIL_PUBLIC_API_MODE=limited`, where Midnight anchoring, approvals,
+  network switching and execution return `503`.
+
+Current hosted deployment:
+
+- <https://proofrail-nu.vercel.app>
+- <https://proofrail-juaug0uys-richard-castro-gois-projects.vercel.app>
+
+This deployment publishes the frontend and a limited `/api/*`. It does not
+publish the worker, the wallet, the proof server, or any Midnight secret. The
+health endpoint reports `apiMode=limited`, `mode=local`, and
+`network=undeployed` until the worker architecture is approved and isolated.
+
+The public Midnight worker and durable queue are deliberately not included in
+the Vercel deployment. A browser or serverless function must never receive a
+wallet, a proof server endpoint, `midnight-chain`, or any wallet state. Follow
+[Deployment and next steps](docs/DEPLOYMENT_AND_NEXT_STEPS.md) before creating
+cloud resources or exposing an API.
+
 ## Documentation
 
+- [Hackathon starting point](docs/HACKATHON_START_HERE.md)
 - [Product pitch](docs/PITCH.md)
 - [Developer onboarding](docs/DEVELOPER_ONBOARDING.md)
 - [Local state and secrets](docs/LOCAL_STATE_AND_SECRETS.md)
@@ -145,6 +182,7 @@ execution adapter.
 - [Security model](docs/SEGURANCA.md)
 - [GitHub App connector](docs/GITHUB_APP.md)
 - [Midnight integration](docs/MIDNIGHT.md)
+- [Midnight resource benchmark](docs/MIDNIGHT_RESOURCE_BENCHMARK.md)
 - [Windows setup](docs/SETUP_WINDOWS.md)
 - [Deployment and next steps](docs/DEPLOYMENT_AND_NEXT_STEPS.md)
 - [Documentation index](docs/README.md)

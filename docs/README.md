@@ -6,15 +6,27 @@ executar localmente.
 
 ## Ordem de leitura
 
-1. [Pitch do produto](PITCH.md) - proposta de valor, casos de uso e limites atuais.
-2. [Onboarding de desenvolvimento](DEVELOPER_ONBOARDING.md) - guia completo para clonar, configurar e executar.
-3. [Estado local e segredos](LOCAL_STATE_AND_SECRETS.md) - arquivos ignorados, responsabilidade e recuperacao segura.
-4. [Arquitetura](ARCHITECTURE.md) - componentes, fluxo de dados e fronteiras de confianca.
-5. [Seguranca](SEGURANCA.md) - ameacas, controles atuais e limites antes de producao.
-6. [Integracao GitHub](GITHUB_APP.md) - configuracao do conector de CI com privilegio minimo.
-7. [Integracao Midnight](MIDNIGHT.md) - contrato, redes, carteiras, validacao e operacao.
-8. [Setup Windows](SETUP_WINDOWS.md) - instalacao, execucao local e diagnostico em Windows/WSL.
-9. [Deploy e proximos passos](DEPLOYMENT_AND_NEXT_STEPS.md) - estado confirmado, arquitetura-alvo e plano de continuidade.
+1. [Ponto de partida do hackathon](HACKATHON_START_HERE.md) - contexto,
+   capacidade medida, decisao de hospedagem e divisao inicial do trabalho.
+2. [Onboarding de desenvolvimento](DEVELOPER_ONBOARDING.md) - guia completo
+   para clonar, configurar e executar.
+3. [Estado local e segredos](LOCAL_STATE_AND_SECRETS.md) - arquivos ignorados,
+   responsabilidade e recuperacao segura.
+4. [Arquitetura](ARCHITECTURE.md) - componentes, fluxo de dados e fronteiras de
+   confianca.
+5. [Seguranca](SEGURANCA.md) - ameacas, controles atuais e limites antes de
+   producao.
+6. [Deploy e proximos passos](DEPLOYMENT_AND_NEXT_STEPS.md) - estado confirmado,
+   arquitetura-alvo e plano de continuidade.
+
+## Referencia por assunto
+
+- [Pitch do produto](PITCH.md) - proposta de valor, casos de uso e limites.
+- [Integracao GitHub](GITHUB_APP.md) - conector de CI com privilegio minimo.
+- [Integracao Midnight](MIDNIGHT.md) - contrato, redes, carteiras e operacao.
+- [Benchmark Midnight](MIDNIGHT_RESOURCE_BENCHMARK.md) - metodologia, dados e
+  conclusao de capacidade.
+- [Setup Windows](SETUP_WINDOWS.md) - instalacao e diagnostico em Windows/WSL.
 
 ## Principios de manutencao
 

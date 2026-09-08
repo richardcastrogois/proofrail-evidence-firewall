@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "test": "tsx src/day03-contracts.self-test.ts && tsx src/service-auth.self-test.ts && tsx src/approval-routes.self-test.ts && tsx src/executor.self-test.ts && tsx src/github.self-test.ts && tsx src/github-routes.self-test.ts && tsx src/store.self-test.ts",
+    "test": "tsx src/day03-contracts.self-test.ts && tsx src/service-auth.self-test.ts && tsx src/runtime-config.self-test.ts && tsx src/limited-public-api.self-test.ts && tsx src/approval-routes.self-test.ts && tsx src/executor.self-test.ts && tsx src/github.self-test.ts && tsx src/github-routes.self-test.ts && tsx src/store.self-test.ts",
+    "test:postgres-store": "tsx src/postgres-store.self-test.ts",
     "agent:keygen": "tsx src/agent-cli.ts keygen",
     "agent:sign": "tsx src/agent-cli.ts sign",
     "approval:create": "tsx src/approver-cli.ts",
@@ -16,6 +17,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
+    "@prisma/client": "^6.16.0",
     "@rational/core": "0.1.0",
     "@rational/shared": "0.1.0",
     "fastify": "^5.6.0",

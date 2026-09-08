@@ -15,7 +15,9 @@ export interface DeclaredDocument {
   sha256: string;
 }
 
-const baseUrl = import.meta.env.VITE_API_URL ?? "";
+const baseUrl = (import.meta.env.VITE_API_URL ?? "").trim();
+export const apiConfigured = baseUrl.length > 0;
+export const apiLimited = import.meta.env.VITE_PROOFRAIL_API_MODE === "limited";
 const STARTUP_RETRY_ATTEMPTS = 30;
 const STARTUP_RETRY_DELAY_MS = 1_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
@@ -41,6 +43,12 @@ async function request<T>(
     startupRetries?: number;
   } = {},
 ): Promise<T> {
+  if (!apiConfigured) {
+    throw new Error(
+      "API pública ainda não conectada. Este deploy mostra o frontend em modo seguro, sem executar decisões, banco ou Midnight.",
+    );
+  }
+
   const hasBody = options?.body !== undefined;
   const startupRetries = requestOptions.startupRetries ?? 0;
   let lastError: unknown;

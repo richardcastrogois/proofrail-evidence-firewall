@@ -1,0 +1,17 @@
+{
+  "name": "@rational/database",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "generate": "node ../../scripts/prisma-with-env.mjs generate",
+    "validate": "node ../../scripts/prisma-with-env.mjs validate",
+    "migrate:deploy": "node ../../scripts/prisma-with-env.mjs migrate deploy",
+    "migrate:status": "node ../../scripts/prisma-with-env.mjs migrate status"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.16.0"
+  }
+}
