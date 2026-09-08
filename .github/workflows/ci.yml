@@ -40,6 +40,9 @@ jobs:
 
       - name: Validate Prisma schema
         run: npm run db:validate
+        env:
+          DATABASE_URL: postgresql://proofrail:proofrail@localhost:5432/proofrail
+          DATABASE_URL_UNPOOLED: postgresql://proofrail:proofrail@localhost:5432/proofrail
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
