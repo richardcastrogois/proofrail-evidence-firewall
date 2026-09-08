@@ -3,7 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+function currentModuleDir(): string {
+  return typeof import.meta.url === "string"
+    ? path.dirname(fileURLToPath(import.meta.url))
+    : process.cwd();
+}
+
+const moduleDir = currentModuleDir();
 const defaultConfigPath = path.resolve(
   moduleDir,
   "../../../data/private/executor.json",

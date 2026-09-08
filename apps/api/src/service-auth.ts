@@ -24,8 +24,15 @@ import {
   ROUTE_ACCESS_RULES,
   type RouteAccessRule,
 } from "./access-control";
+import { isLimitedPublicApiMode } from "./runtime-config";
 
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+function currentModuleDir(): string {
+  return typeof import.meta.url === "string"
+    ? path.dirname(fileURLToPath(import.meta.url))
+    : process.cwd();
+}
+
+const moduleDir = currentModuleDir();
 const TokenHashSchema = z.string().regex(/^[0-9a-f]{64}$/);
 const IdentifierSchema = z
   .string()
@@ -202,6 +209,16 @@ function routeRule(request: FastifyRequest): RouteAccessRule | undefined {
   );
 }
 
+function isLimitedPublicBrowserRoute(rule: RouteAccessRule | undefined): boolean {
+  if (!rule || !isLimitedPublicApiMode()) return false;
+  return (
+    (rule.method === "GET" && rule.path === "/api/state") ||
+    (rule.method === "POST" && rule.path === "/api/scenario/select") ||
+    (rule.method === "POST" && rule.path === "/api/evidence/self-declared") ||
+    (rule.method === "POST" && rule.path === "/api/evidence/document")
+  );
+}
+
 export class ServiceAuthenticator {
   readonly principals: Array<ServicePrincipal & { tokenSha256: string }>;
   readonly approverKeys: ApproverKeyConfig[];
@@ -270,7 +287,8 @@ export class ServiceAuthenticator {
     }
     if (
       rule.authentication === "public" ||
-      rule.authentication === "github_webhook"
+      rule.authentication === "github_webhook" ||
+      isLimitedPublicBrowserRoute(rule)
     ) {
       return;
     }
@@ -322,6 +340,20 @@ export async function loadServiceAuthenticator(input: {
   configPath?: string;
 } = {}): Promise<ServiceAuthenticator> {
   const env = input.env ?? process.env;
+  const envConfig = env.PROOFRAIL_SERVICE_AUTH_CONFIG_JSON?.trim();
+  if (envConfig) {
+    const parsed = JSON.parse(envConfig) as unknown;
+    const result = ServiceAuthFileSchema.safeParse(parsed);
+    if (!result.success) {
+      throw new ServiceAuthConfigurationError(
+        `Service authentication config from PROOFRAIL_SERVICE_AUTH_CONFIG_JSON is invalid: ${result.error.issues
+          .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+          .join("; ")}`,
+      );
+    }
+    return new ServiceAuthenticator(result.data);
+  }
+
   const dataDir =
     env.DATA_DIR ?? path.resolve(moduleDir, "../../../data");
   const configPath =
@@ -332,6 +364,20 @@ export async function loadServiceAuthenticator(input: {
   try {
     parsed = JSON.parse(await readFile(configPath, "utf8"));
   } catch (error) {
+    if (isLimitedPublicApiMode(env)) {
+      return new ServiceAuthenticator({
+        schemaVersion: 1,
+        principals: [
+          {
+            id: "limited-public-api-placeholder",
+            kind: "operator",
+            scopes: ["state:read"],
+            tokenSha256: hashServiceToken(randomUUID()),
+          },
+        ],
+        approverKeys: [],
+      });
+    }
     throw new ServiceAuthConfigurationError(
       `Service authentication config is unavailable at ${configPath}`,
       { cause: error },

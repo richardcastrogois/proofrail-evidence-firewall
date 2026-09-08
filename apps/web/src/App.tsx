@@ -31,12 +31,15 @@ import {
 } from "lucide-react";
 import type {
   DecisionResult,
+  GitHubIntegrationStatus,
   NetworkId,
+  NetworkStatus,
   ProposedAction,
   PublicState,
   ScenarioId,
 } from "@rational/shared";
-import { api, type DeclaredDocument } from "./api";
+import { SCENARIOS, scenarioById } from "@rational/shared";
+import { api, apiConfigured, apiLimited, type DeclaredDocument } from "./api";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger, ScrollToPlugin);
 
@@ -72,6 +75,74 @@ const pipeline = [
   ["04", "Autorizar", "Emita um permit limitado"],
   ["05", "Executar", "Consuma o permit e registre"],
 ] as const;
+
+const disconnectedMessage =
+  "API pública ainda não conectada. Este preview mostra o frontend em modo seguro; decisões, banco e Midnight permanecem bloqueados até a API ser publicada separadamente.";
+const limitedApiMessage =
+  "API pública limitada conectada. Estado e autodeclarações usam Neon; evidência assinada, ancoragem Midnight, aprovação, troca de rede e execução ficam bloqueadas até definirmos chaves e worker.";
+
+const fallbackNetwork: NetworkStatus = {
+  active: "preprod",
+  deployments: {
+    undeployed: null,
+    preview: null,
+    preprod:
+      "9a1a5ae1cbb7bd5a64e649c5c9b63c9740907df53a2a1a0ba98f8e3a1b33fdd5",
+  },
+  faucets: {
+    undeployed: null,
+    preview: "https://faucet.testnet-02.midnight.network/",
+    preprod: "https://faucet.preprod-01.midnight.network/",
+  },
+};
+
+const disconnectedGithub: GitHubIntegrationStatus = {
+  configured: false,
+  webhookConfigured: false,
+  agentIdentityConfigured: false,
+  requireWebhook: true,
+  allowedRepositories: [],
+  apiVersion: "frontend-only",
+  missingConfiguration: ["API pública não publicada"],
+};
+
+function createDisconnectedState(
+  scenarioId: ScenarioId = "agent_deploy",
+  network: NetworkStatus = fallbackNetwork,
+): PublicState {
+  const scenario = scenarioById(scenarioId);
+  const now = new Date().toISOString();
+
+  return {
+    mode: "cli",
+    selectedScenarioId: scenario.id,
+    scenarios: SCENARIOS,
+    defaultAction: scenario.defaultAction,
+    policy: scenario.policy,
+    network,
+    integrations: { github: disconnectedGithub },
+    origins: [],
+    evidence: [],
+    decisions: [],
+    anchors: [],
+    executions: [],
+    audit: [
+      {
+        id: "frontend-only-preview",
+        type: "state_initialized",
+        message: "Frontend iniciado sem API pública conectada.",
+        metadata: {},
+        createdAt: now,
+      },
+    ],
+    metrics: {
+      originalRawBytes: 0,
+      accessibleRawBytes: 0,
+      persistentAnchorBytes: 0,
+      reductionPercent: 0,
+    },
+  };
+}
 
 function statusIcon(status: DecisionResult["status"]) {
   if (status === "ALLOW") return <CheckCircle2 aria-hidden="true" />;
@@ -133,6 +204,10 @@ export function App() {
   });
 
   const motionReduced = motionMode === "reduced";
+  const apiLabel =
+    import.meta.env.VITE_API_URL === "."
+      ? "Mesmo domínio"
+      : import.meta.env.VITE_API_URL || "Ambiente local";
 
   function toggleMotion() {
     const next: MotionMode = motionReduced ? "full" : "reduced";
@@ -141,6 +216,20 @@ export function App() {
   }
 
   async function refresh() {
+    if (!apiConfigured) {
+      const next = createDisconnectedState(
+        state?.selectedScenarioId ?? "agent_deploy",
+        state?.network ?? fallbackNetwork,
+      );
+      setState(next);
+      setAction((current) =>
+        !current || current.scenarioId !== next.defaultAction.scenarioId
+          ? next.defaultAction
+          : current,
+      );
+      return next;
+    }
+
     const next = await api.state();
     setState(next);
     setAction((current) =>
@@ -152,6 +241,11 @@ export function App() {
   }
 
   async function run(label: string, task: () => Promise<unknown>) {
+    if (!apiConfigured) {
+      setError(disconnectedMessage);
+      return;
+    }
+
     setBusy(label);
     setBusySince(Date.now());
     setBusyElapsedSeconds(0);
@@ -353,6 +447,15 @@ export function App() {
   });
 
   async function chooseScenario(scenarioId: ScenarioId) {
+    if (!apiConfigured) {
+      const next = createDisconnectedState(scenarioId, state?.network ?? fallbackNetwork);
+      setState(next);
+      setAction(next.defaultAction);
+      setDocument(null);
+      setError(null);
+      return;
+    }
+
     setBusy("scenario");
     setError(null);
     try {
@@ -368,6 +471,26 @@ export function App() {
   }
 
   async function chooseNetwork(network: NetworkId) {
+    if (apiLimited) {
+      setError(limitedApiMessage);
+      return;
+    }
+
+    if (!apiConfigured) {
+      const nextNetwork = {
+        ...(state?.network ?? fallbackNetwork),
+        active: network,
+      };
+      const next = createDisconnectedState(
+        state?.selectedScenarioId ?? "agent_deploy",
+        nextNetwork,
+      );
+      setState(next);
+      setAction((current) => current ?? next.defaultAction);
+      setError(null);
+      return;
+    }
+
     await run("network", () => api.selectNetwork(network));
   }
 
@@ -442,6 +565,14 @@ export function App() {
 
   async function resetScenario() {
     setDocument(null);
+    if (!apiConfigured) {
+      const next = createDisconnectedState(scenario.id, state?.network ?? fallbackNetwork);
+      setState(next);
+      setAction(next.defaultAction);
+      setError(null);
+      return;
+    }
+
     await run("reset", () => api.reset(scenario.id));
   }
 
@@ -471,7 +602,7 @@ export function App() {
               {(Object.keys(networkCopy) as NetworkId[]).map((network) => (
                 <button
                   className={state.network.active === network ? "active" : ""}
-                  disabled={busy !== null}
+                  disabled={busy !== null || apiLimited}
                   key={network}
                   onClick={() => chooseNetwork(network)}
                 >
@@ -618,7 +749,7 @@ export function App() {
             </div>
             <div className="architecture-path">
               <div data-reveal-item><strong>Navegador</strong><span>localhost:5173</span></div><ArrowRight />
-              <div data-reveal-item><strong>API Proofrail</strong><span>127.0.0.1:3333</span></div><ArrowRight />
+              <div data-reveal-item><strong>API Proofrail</strong><span>{apiLabel}</span></div><ArrowRight />
               <div data-reveal-item><strong>CLI + prova</strong><span>carteira local</span></div><ArrowRight />
               <div className="onchain" data-reveal-item><strong>Contrato Midnight</strong><span>{shortHash(activeDeployment)}</span></div>
             </div>
@@ -668,6 +799,8 @@ export function App() {
 
           <DecisionPipeline completed={completedStages} />
 
+          {!apiConfigured ? <div className="error-banner"><TriangleAlert />{disconnectedMessage}</div> : null}
+          {apiConfigured && apiLimited ? <div className="error-banner"><TriangleAlert />{limitedApiMessage}</div> : null}
           {error ? <div className="error-banner"><TriangleAlert />{error}</div> : null}
 
           {!networkReady ? (
@@ -702,7 +835,7 @@ export function App() {
                 </small>
               ) : null}
             </div>
-            <button disabled={busy !== null || !networkReady} onClick={() => run("auto", () => api.runSimulation(action))}>
+            <button disabled={busy !== null || !networkReady || !apiConfigured || apiLimited} onClick={() => run("auto", () => api.runSimulation(action))}>
               {busy === "auto" ? <RefreshCcw className="spin" /> : <Play />}
               {busy === "auto" ? "Provando na rede…" : "Verificar evidências"}
             </button>
@@ -766,7 +899,7 @@ export function App() {
                     <div className="document-lab agent-claim-lab">
                       <div className="document-lab-title"><Bot /><div><strong>Alegação do próprio agente</strong><span>“Meu deploy está autorizado” não comprova identidade, CI, segurança ou aprovação.</span></div></div>
                       <p>A alegação é vinculada ao pedido e auditada, mas permanece autodeclarada e nunca satisfaz uma origem exigida pela política.</p>
-                      <button className="secondary-button" disabled={busy !== null} onClick={() => run("self-declared", () => api.selfDeclared(action))}>
+                      <button className="secondary-button" disabled={busy !== null || !apiConfigured} onClick={() => run("self-declared", () => api.selfDeclared(action))}>
                         <Bot /> Registrar alegação sem origem
                       </button>
                       <small className="document-next-step">Depois avalie: o resultado esperado é DENY, porque faltam fontes independentes.</small>
@@ -789,7 +922,7 @@ export function App() {
                         <em>AUTODECLARADO</em>
                       </div>
                     ) : null}
-                    <button className="secondary-button" disabled={busy !== null || !document} onClick={registerDocument}>
+                    <button className="secondary-button" disabled={busy !== null || !document || !apiConfigured} onClick={registerDocument}>
                       <FileCheck2 /> {selfDeclaredCount > 0 ? "Registrar outra alegação" : "Registrar documento como alegação"}
                     </button>
                     <small className="document-next-step">Depois, avalie sem coletar fontes: o resultado esperado é DENY.</small>
@@ -812,13 +945,13 @@ export function App() {
                         <span className="source-number">{collected > 0 ? <Check /> : index + 1}</span>
                         <div><strong>{source.name}{source.role === "review" ? <em className="source-role">REVISÃO</em> : null}{source.id === "ci-agent-deploy" ? <em className={`source-role connector ${github.configured ? "ready" : ""}`}>GITHUB APP</em> : null}</strong><p>{source.description}</p><small>{source.id === "ci-agent-deploy" && github.configured ? "Conector externo disponível via API/MCP; os controles ao lado usam respostas de demonstração." : `${collected} recibo(s) verificado(s)`}</small></div>
                         <div className="source-actions">
-                          <button disabled={busy !== null} onClick={() => run(source.id, () => api.collect(source.id, action, "valid"))}>Confirmar evidência</button>
-                          <button className="conflict-button" disabled={busy !== null} onClick={() => run(`${source.id}-bad`, () => api.collect(source.id, action, "contradictory"))}>Registrar conflito</button>
+                          <button disabled={busy !== null || !apiConfigured || apiLimited} onClick={() => run(source.id, () => api.collect(source.id, action, "valid"))}>Confirmar evidência</button>
+                          <button className="conflict-button" disabled={busy !== null || !apiConfigured || apiLimited} onClick={() => run(`${source.id}-bad`, () => api.collect(source.id, action, "contradictory"))}>Registrar conflito</button>
                         </div>
                       </div>
                     );
                   })}
-                  <button className="evaluate-button" disabled={busy !== null || !networkReady} onClick={() => run("evaluate", () => api.evaluate(action))}>
+                  <button className="evaluate-button" disabled={busy !== null || !networkReady || !apiConfigured || apiLimited} onClick={() => run("evaluate", () => api.evaluate(action))}>
                     <ShieldCheck /> Avaliar evidências disponíveis <span>decisão + âncora</span>
                   </button>
                 </article>
@@ -834,7 +967,7 @@ export function App() {
                   {latestDecision.missingRequirements.length > 0 ? <div className="finding"><strong>O que ainda falta</strong>{latestDecision.missingRequirements.map((item) => <span key={item}>— {item}</span>)}</div> : null}
                   {latestDecision.contradictions.length > 0 ? <div className="finding danger"><strong>Conflitos detectados</strong>{latestDecision.contradictions.map((item) => <span key={item}>— {item}</span>)}</div> : null}
                   <div className="chain-receipt"><div><Database /><strong>Recibo Midnight</strong></div><dl><div><dt>Rede</dt><dd>{state.network.active}</dd></div><div><dt>Contrato</dt><dd title={latestAnchor?.contractAddress ?? undefined}>{shortHash(latestAnchor?.contractAddress)}</dd></div><div><dt>Transação</dt><dd title={latestAnchor?.txId ?? undefined}>{shortHash(latestAnchor?.txId)}</dd></div><div><dt>Merkle root</dt><dd title={latestDecision.evidenceRoot}>{shortHash(latestDecision.evidenceRoot)}</dd></div></dl></div>
-                  {latestDecision.permit ? <button className="permit-button" disabled={busy !== null || latestExecution?.permitId === latestDecision.permit.id} onClick={() => run("execute", () => api.execute(latestDecision.permit!.id))}><Play />{latestExecution?.permitId === latestDecision.permit.id ? "Permit consumido" : "Executar com permit"}</button> : null}
+                  {latestDecision.permit ? <button className="permit-button" disabled={busy !== null || !apiConfigured || apiLimited || latestExecution?.permitId === latestDecision.permit.id} onClick={() => run("execute", () => api.execute(latestDecision.permit!.id))}><Play />{latestExecution?.permitId === latestDecision.permit.id ? "Permit consumido" : "Executar com permit"}</button> : null}
                 </>
               ) : (
                 <div className="decision-empty"><div><Circle /><ArrowRight /><ShieldCheck /></div><strong>Ainda sem decisão</strong><p>Registre um documento, simule as fontes ou rode a trilha completa.</p></div>
@@ -847,7 +980,7 @@ export function App() {
               <div className="section-heading compact"><div><span className="section-index">C</span><div><h2>Minimização de dados</h2><p>Apague o que não precisa sobreviver.</p></div></div></div>
               <div className="lifecycle-visual"><div><span>Bruto recebido</span><strong>{state.metrics.originalRawBytes} B</strong></div><ArrowRight /><div className={state.metrics.accessibleRawBytes === 0 ? "erased" : ""}><span>Bruto acessível</span><strong>{state.metrics.accessibleRawBytes} B</strong></div><ArrowRight /><div><span>Commitments</span><strong>{state.metrics.persistentAnchorBytes} B</strong></div></div>
               <p className="data-note">Em demos pequenas, o recibo pode ser maior que o dado. O ganho aparece com documentos grandes e batching.</p>
-              <button className="erase-button" disabled={busy !== null} onClick={() => run("expire", () => api.expire())}><KeyRound /> Destruir chaves deste pedido</button>
+              <button className="erase-button" disabled={busy !== null || !apiConfigured} onClick={() => run("expire", () => api.expire())}><KeyRound /> Destruir chaves deste pedido</button>
             </article>
 
             <article className="audit-panel">

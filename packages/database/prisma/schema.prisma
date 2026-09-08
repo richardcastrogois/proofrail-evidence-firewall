@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+// JsonStore remains the active local adapter. This schema is the durable data
+// contract for the incremental PostgreSQL migration and the future worker.
+model ProofrailState {
+  id            String   @id
+  schemaVersion Int
+  revision      Int      @default(0)
+  payload       Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Organization {
+  id        String   @id
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  policies  Policy[]
+  actions   Action[]
+  audit     AuditEvent[]
+}
+
+model Policy {
+  id             String       @id
+  organizationId String
+  name           String
+  version        Int
+  commitment     String
+  definition     Json
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actions        Action[]
+
+  @@unique([organizationId, name, version])
+  @@index([organizationId, active])
+}
+
+model Action {
+  id               String       @id
+  organizationId   String
+  policyId         String
+  requestId        String       @unique
+  actionCommitment String       @unique
+  payload          Json
+  createdAt        DateTime     @default(now())
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  policy           Policy       @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  evidence         Evidence[]
+  decisions        Decision[]
+  executions       Execution[]
+
+  @@index([organizationId, createdAt])
+}
+
+model Evidence {
+  id          String   @id
+  actionId    String
+  sourceId    String
+  sourceClass String
+  verified    Boolean
+  expiresAt   DateTime
+  receipt     Json
+  createdAt   DateTime @default(now())
+  action      Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@index([actionId, sourceId])
+  @@index([expiresAt])
+}
+
+model Decision {
+  id               String   @id
+  actionId         String
+  status           String
+  actionCommitment String
+  evidenceRoot     String
+  policyCommitment String
+  payload          Json
+  createdAt        DateTime @default(now())
+  action           Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  anchor           Anchor?
+  permit           Permit?
+
+  @@index([actionId, createdAt])
+}
+
+model Anchor {
+  id              String   @id
+  decisionId      String   @unique
+  network         String
+  contractAddress String?
+  transactionId   String?
+  status          String
+  payload         Json
+  createdAt       DateTime @default(now())
+  decision        Decision @relation(fields: [decisionId], references: [id], onDelete: Restrict)
+
+  @@index([network, createdAt])
+}
+
+model Permit {
+  id         String   @id
+  decisionId String   @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  payload    Json
+  createdAt  DateTime @default(now())
+  decision   Decision @relation(fields: [decisionId], references: [id], onDelete: Restrict)
+  executions Execution[]
+
+  @@index([expiresAt])
+}
+
+model Execution {
+  id             String   @id
+  actionId       String
+  permitId       String
+  idempotencyKey String   @unique
+  status         String
+  externalRef    String?
+  failureCode    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  action         Action   @relation(fields: [actionId], references: [id], onDelete: Restrict)
+  permit         Permit   @relation(fields: [permitId], references: [id], onDelete: Restrict)
+
+  @@index([permitId, status])
+}
+
+model AsyncOperation {
+  id             String   @id
+  organizationId String
+  type           String
+  status         String
+  idempotencyKey String   @unique
+  payload        Json
+  result         Json?
+  attemptCount   Int      @default(0)
+  availableAt    DateTime @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, availableAt])
+  @@index([organizationId, createdAt])
+}
+
+model AuditEvent {
+  id             String        @id
+  organizationId String?
+  type           String
+  requestId      String?
+  operationId    String?
+  message        String
+  metadata       Json
+  createdAt      DateTime      @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([requestId])
+  @@index([operationId])
+}

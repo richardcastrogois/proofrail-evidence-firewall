@@ -11,4 +11,4 @@ O script `scripts/05-scaffold-midnight.ps1` cria ou reutiliza `midnight-chain`, 
 
 Cada `registerDecision` grava Merkle root, commitments de política/ação, decisão, validade e contagens de evidência/contradição. Um `ALLOW` exige evidência suficiente, zero contradições e action commitment ainda não utilizado.
 
-Nenhum documento, identificação, valor empresarial ou evidência bruta é gravado. O contrato ainda recebe o resumo preparado pelo backend; consulte [`../docs/MIGRACAO_MIDNIGHT.md`](../docs/MIGRACAO_MIDNIGHT.md) para a fronteira de confiança e o roteiro da prova privada completa.
+Nenhum documento, identificação, valor empresarial ou evidência bruta é gravado. O contrato ainda recebe o resumo preparado pelo backend; consulte [`../docs/MIDNIGHT.md`](../docs/MIDNIGHT.md) para a fronteira de confiança e a operação nas redes públicas de teste.

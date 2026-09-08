@@ -23,6 +23,8 @@ verify:
   before_script:
     - npm ci --cache .npm --prefer-offline
   script:
+    - npm run db:generate
+    - DATABASE_URL=postgresql://proofrail:proofrail@localhost:5432/proofrail DATABASE_URL_UNPOOLED=postgresql://proofrail:proofrail@localhost:5432/proofrail npm run db:validate
     - npm audit --omit=dev --audit-level=high
     - npm test
     - npm run typecheck

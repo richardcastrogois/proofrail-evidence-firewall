@@ -1,27 +1,51 @@
-# Documentação do Proofrail
+# Documentacao do Proofrail
 
-Este diretório concentra a documentação destinada a desenvolvedores, avaliadores e futuros mantenedores. O [`README.md` da raiz](../README.md) continua sendo a apresentação pública do projeto.
+Este diretorio contem a documentacao duravel do produto e da sua operacao. O
+[README da raiz](../README.md) apresenta o produto e o caminho rapido para
+executar localmente.
 
-## Ordem de leitura recomendada
+## Ordem de leitura
 
-1. [`PITCH_E_TESTE_LOCAL.md`](PITCH_E_TESTE_LOCAL.md) — resumo para postagem, venda do pitch e roteiro simples para testar localmente.
-2. [`ETAPA_04_PREPROD_OPERACAO.md`](ETAPA_04_PREPROD_OPERACAO.md) — contrato endurecido, Preprod, matriz negativa e runbook operacional.
-3. [`HANDOFF_ETAPA_03.md`](HANDOFF_ETAPA_03.md) — histórico e evidências do fechamento da Etapa 03.
-4. [`GUIA_DO_PROJETO.md`](GUIA_DO_PROJETO.md) — o que o produto resolve, como funciona e como testar o fluxo visual.
-5. [`SETUP_WINDOWS.md`](SETUP_WINDOWS.md) — instalação, execução local e comandos de diagnóstico no Windows/WSL.
-6. [`ARCHITECTURE.md`](ARCHITECTURE.md) — componentes, arquivos, fluxo de dados e fronteiras de confiança.
-7. [`SEGURANCA.md`](SEGURANCA.md) — ameaças, controles implementados e bloqueios antes de produção.
-8. [`GITHUB_APP.md`](GITHUB_APP.md) — configuração do conector GitHub com privilégio mínimo.
-9. [`MIGRACAO_MIDNIGHT.md`](MIGRACAO_MIDNIGHT.md) — garantias atuais e evolução do contrato/provas na Midnight.
-10. [`PLANO_4_DIAS.md`](PLANO_4_DIAS.md) — histórico do plano incremental e critérios de aceite.
-11. [`REPOSITORIO_PRIVADO_GRATUITO.md`](REPOSITORIO_PRIVADO_GRATUITO.md) — estratégia GitLab privado principal + GitHub privado como espelho, proteção da `main` e fluxo diário.
+1. [Ponto de partida do hackathon](HACKATHON_START_HERE.md) - contexto,
+   capacidade medida, decisao de hospedagem e divisao inicial do trabalho.
+2. [Onboarding de desenvolvimento](DEVELOPER_ONBOARDING.md) - guia completo
+   para clonar, configurar e executar.
+3. [Estado local e segredos](LOCAL_STATE_AND_SECRETS.md) - arquivos ignorados,
+   responsabilidade e recuperacao segura.
+4. [Arquitetura](ARCHITECTURE.md) - componentes, fluxo de dados e fronteiras de
+   confianca.
+5. [Seguranca](SEGURANCA.md) - ameacas, controles atuais e limites antes de
+   producao.
+6. [Deploy e proximos passos](DEPLOYMENT_AND_NEXT_STEPS.md) - estado confirmado,
+   arquitetura-alvo e plano de continuidade.
+
+## Referencia por assunto
+
+- [Pitch do produto](PITCH.md) - proposta de valor, casos de uso e limites.
+- [Integracao GitHub](GITHUB_APP.md) - conector de CI com privilegio minimo.
+- [Integracao Midnight](MIDNIGHT.md) - contrato, redes, carteiras e operacao.
+- [Benchmark Midnight](MIDNIGHT_RESOURCE_BENCHMARK.md) - metodologia, dados e
+  conclusao de capacidade.
+- [Setup Windows](SETUP_WINDOWS.md) - instalacao e diagnostico em Windows/WSL.
+
+## Principios de manutencao
+
+- Documente o comportamento atual e diferencie-o claramente de decisoes ainda
+  nao implementadas.
+- Preserve aqui somente material que ajuda a entender, executar, operar ou
+  evoluir o produto. Historico de entregas pertence ao Git e as discussoes de
+  projeto, nao a este diretorio.
+- Atualize o documento tecnico correspondente quando uma interface, limite de
+  seguranca, rede suportada ou procedimento operacional mudar.
 
 ## O que nunca deve ser publicado
 
-- `.env`, PEM de GitHub App, chaves privadas, mnemonics ou seeds;
-- `data/private/`, `data/raw/` e `data/store.json`;
-- `midnight-chain/`, `.midnight-wallet-state/` e `.midnight-state.json`;
-- `.codex/`, `.agents/` e configurações locais com caminhos da máquina;
-- `node_modules/`, `dist/`, `coverage/`, logs e backups de execução.
+- .env, PEM de GitHub App, chaves privadas, mnemonics ou seeds;
+- data/private, data/raw e data/store.json;
+- midnight-chain, .midnight-wallet-state e .midnight-state.json;
+- .codex, .agents e configuracoes locais com caminhos da maquina;
+- node_modules, dist, coverage, logs e backups de execucao.
 
-Esses caminhos são protegidos por [`.gitignore`](../.gitignore). Antes de cada publicação, confira a lista real com `git status --short --ignored` e nunca force um arquivo ignorado com `git add -f`.
+Esses caminhos sao protegidos por [.gitignore](../.gitignore). Antes de cada
+publicacao, confira a lista real com git status --short --ignored e nunca force
+um arquivo ignorado com git add -f.
