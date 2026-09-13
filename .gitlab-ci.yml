@@ -6,6 +6,7 @@ workflow:
 
 stages:
   - verify
+  - docker-build
 
 default:
   image: node:22-bookworm-slim
@@ -34,4 +35,37 @@ verify:
     when: on_success
     expire_in: 7 days
     paths:
-      - apps/web/dist/
+      - frontend/dist/
+
+docker-build:
+  stage: docker-build
+  image: docker:27-cli
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  needs:
+    - verify
+  before_script:
+    - docker version
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+      fi
+  script:
+    - docker build -f frontend/Dockerfile --build-arg VITE_API_URL="${VITE_API_URL:-}" --build-arg VITE_PROOFRAIL_API_MODE="${VITE_PROOFRAIL_API_MODE:-}" -t "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA" .
+    - docker build -f backend/Dockerfile -t "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA" .
+    - docker build -f worker/Dockerfile -t "$CI_REGISTRY_IMAGE/worker:$CI_COMMIT_SHA" .
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        docker push "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA"
+        docker push "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA"
+        docker push "$CI_REGISTRY_IMAGE/worker:$CI_COMMIT_SHA"
+        docker tag "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA" "$CI_REGISTRY_IMAGE/frontend:latest"
+        docker tag "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA" "$CI_REGISTRY_IMAGE/backend:latest"
+        docker tag "$CI_REGISTRY_IMAGE/worker:$CI_COMMIT_SHA" "$CI_REGISTRY_IMAGE/worker:latest"
+        docker push "$CI_REGISTRY_IMAGE/frontend:latest"
+        docker push "$CI_REGISTRY_IMAGE/backend:latest"
+        docker push "$CI_REGISTRY_IMAGE/worker:latest"
+      fi

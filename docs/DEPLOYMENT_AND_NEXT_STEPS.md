@@ -129,9 +129,8 @@ O frontend e a API publica limitada foram publicados na Vercel.
    deve preservar os testes e separar os segredos do banco de dados.
 
 Aceite: schema validado, migracao aplicada em um Neon de desenvolvimento,
-adapter PostgreSQL inicial validado, frontend publicado e API limitada
-respondendo em Vercel com `apiMode=limited`. Isso nao inclui ancoragem
-Midnight publica.
+adapter PostgreSQL inicial validado e frontend publicado na Vercel. Isso nao
+inclui API publica, worker ou ancoragem Midnight publica.
 
 Antes de qualquer publicacao, execute `npm run deploy:preflight`. Para validar
 somente o frontend Vercel, execute

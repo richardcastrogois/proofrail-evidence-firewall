@@ -7,7 +7,7 @@ try {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   for (const envFile of [".env", ".env.local"]) {
     try {
-      loadEnvFile(path.resolve(moduleDir, `../../../${envFile}`));
+      loadEnvFile(path.resolve(moduleDir, `../../${envFile}`));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }

@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-const rootDir = path.resolve(moduleDir, "../../..");
+const rootDir = path.resolve(moduleDir, "../..");
 
 for (const envFile of [".env", ".env.local"]) {
   const envPath = path.join(rootDir, envFile);

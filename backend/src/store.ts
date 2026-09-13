@@ -22,7 +22,7 @@ function currentModuleDir(): string {
 const moduleDir = currentModuleDir();
 const dataDir =
   process.env.DATA_DIR ??
-  (process.env.VERCEL ? "/tmp/proofrail" : path.resolve(moduleDir, "../../../data"));
+  (process.env.VERCEL ? "/tmp/proofrail" : path.resolve(moduleDir, "../../data"));
 const storePath = path.join(dataDir, "store.json");
 const privateDir = path.join(dataDir, "private");
 const signingSecretsPath = path.join(privateDir, "signing-secrets.json");

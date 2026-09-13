@@ -12,7 +12,7 @@ function currentModuleDir(): string {
 const moduleDir = currentModuleDir();
 const defaultConfigPath = path.resolve(
   moduleDir,
-  "../../../data/private/executor.json",
+  "../../data/private/executor.json",
 );
 const GITHUB_API_VERSION = "2026-03-10";
 const MAX_RESPONSE_BYTES = 256 * 1024;

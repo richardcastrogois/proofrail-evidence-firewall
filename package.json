@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/*",
+    "frontend",
+    "backend",
+    "worker",
     "packages/*"
   ],
   "scripts": {
@@ -19,6 +21,8 @@
     "db:validate": "npm run validate --workspace @rational/database",
     "db:check": "node scripts/check-neon-migration.mjs",
     "deploy:preflight": "node scripts/deploy-preflight.mjs",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up --build",
     "reset": "node -e \"fetch('http://127.0.0.1:3333/api/reset',{method:'POST'}).then(r=>r.json()).then(console.log)\""
   },
   "engines": {

@@ -22,7 +22,7 @@ const authSecretsPath =
   process.env.PROOFRAIL_SERVICE_AUTH_SECRETS ??
   path.resolve(
     moduleDir,
-    "../../../data/private/service-auth-secrets.json",
+    "../../data/private/service-auth-secrets.json",
   );
 const AuthSecretsSchema = z
   .object({

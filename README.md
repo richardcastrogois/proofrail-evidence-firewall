@@ -121,9 +121,10 @@ React/Vite web
 
 Core components:
 
-- `apps/web` - product interface and network-aware decision workflow;
-- `apps/api` - evidence collection, policy orchestration, authorization,
+- `frontend` - product interface and network-aware decision workflow;
+- `backend` - evidence collection, policy orchestration, authorization,
   execution, logging, and API/MCP boundaries;
+- `worker` - MCP tools and auxiliary agent-facing operations;
 - `packages/core` - commitments, signatures, encryption, Merkle roots, and
   deterministic policy evaluation;
 - `packages/shared` - runtime schemas and contracts shared across services;
@@ -139,32 +140,28 @@ execution adapter.
 ## Hosted deployment
 
 The repository contains the deployment foundation for a public frontend and a
-limited public API:
+separate backend service:
 
-- `vercel.json` publishes the Vite web application and a short Vercel Function
-  under `/api/*`;
+- `vercel.json` publishes only the Vite web application from `frontend`;
 - `packages/database/prisma` contains the PostgreSQL/Neon data contract and
   first migration;
 - `PROOFRAIL_STORE=postgres` enables the PostgreSQL state adapter while keeping
   signing secrets outside the database;
 - when `VITE_API_URL` is absent, the browser bundle renders a frontend-only
   preview and refuses backend actions;
-- when `VITE_API_URL=.` and `VITE_PROOFRAIL_API_MODE=limited`, the browser uses
-  the same Vercel deployment for read-only state and safe public declarations;
-- `npm run deploy:preflight` refuses API publication until public origins and
-  PostgreSQL are configured. The API can only be published before the worker in
-  `PROOFRAIL_PUBLIC_API_MODE=limited`, where Midnight anchoring, approvals,
-  network switching and execution return `503`.
+- when `VITE_API_URL` points to the deployed backend, the browser uses that
+  external API for state, decisions and execution flows;
+- `api/` remains in the repository temporarily for compatibility, but it is no
+  longer part of the Vercel deployment.
 
 Current hosted deployment:
 
 - <https://proofrail-nu.vercel.app>
 - <https://proofrail-juaug0uys-richard-castro-gois-projects.vercel.app>
 
-This deployment publishes the frontend and a limited `/api/*`. It does not
-publish the worker, the wallet, the proof server, or any Midnight secret. The
-health endpoint reports `apiMode=limited`, `mode=local`, and
-`network=undeployed` until the worker architecture is approved and isolated.
+This deployment publishes only the frontend. It does not publish the backend,
+worker, wallet, proof server, or any Midnight secret. Backend access must be
+configured explicitly through `VITE_API_URL`.
 
 The public Midnight worker and durable queue are deliberately not included in
 the Vercel deployment. A browser or serverless function must never receive a
@@ -188,6 +185,29 @@ cloud resources or exposing an API.
 - [Documentation index](docs/README.md)
 
 ## Run locally
+
+### Docker
+
+The repository provides separate images for each runtime boundary:
+
+- `frontend/Dockerfile` - static Vite build served by Nginx;
+- `backend/Dockerfile` - Fastify API, ready for Render or another container host;
+- `worker/Dockerfile` - MCP/worker process, optional in local Compose;
+- `docker-compose.yml` - local stack with frontend, backend and PostgreSQL.
+
+Run the default stack:
+
+~~~bash
+npm run docker:up
+~~~
+
+The frontend is exposed at `http://localhost:8080` and the backend at
+`http://localhost:3333`. The worker is optional because the current process uses
+MCP over stdio:
+
+~~~bash
+docker compose --profile worker up --build
+~~~
 
 ### Requirements
 
