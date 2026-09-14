@@ -6,6 +6,10 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3333
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 COPY frontend/package.json frontend/package.json
 COPY backend/package.json backend/package.json

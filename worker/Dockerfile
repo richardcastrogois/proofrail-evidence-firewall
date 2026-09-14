@@ -17,8 +17,7 @@ RUN npm ci --include=dev && npm cache clean --force
 
 COPY . .
 
-RUN npm run db:generate \
-  && npm run typecheck --workspace @rational/mcp \
+RUN npm run typecheck --workspace @rational/mcp \
   && groupadd --system proofrail \
   && useradd --system --gid proofrail --home-dir /app proofrail \
   && mkdir -p /app/data \
