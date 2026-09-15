@@ -137,6 +137,10 @@ should connect its own identity provider, scanner, transactional database,
 KMS/HSM, observability, rate limiting, rollback, and destination-specific
 execution adapter.
 
+The three maintainers approved publication under the
+[Apache License 2.0](LICENSE). Dependency licenses and the generated local
+Midnight scaffold remain governed by their respective terms.
+
 ## Hosted deployment
 
 The repository contains the deployment foundation for a public frontend and a
@@ -182,7 +186,13 @@ cloud resources or exposing an API.
 - [Midnight resource benchmark](docs/MIDNIGHT_RESOURCE_BENCHMARK.md)
 - [Windows setup](docs/SETUP_WINDOWS.md)
 - [Deployment and next steps](docs/DEPLOYMENT_AND_NEXT_STEPS.md)
+- [Phase 01 deliverables and evidence](docs/PHASE_01_DELIVERABLES.md)
+- [GitLab validation guide](docs/GITLAB_VALIDATION_GUIDE.md)
 - [Documentation index](docs/README.md)
+
+## License
+
+Proofrail is licensed under the [Apache License 2.0](LICENSE).
 
 ## Run locally
 
@@ -271,3 +281,16 @@ wsl -d Ubuntu -- bash -lc "source ~/.nvm/nvm.sh && cd /mnt/c/dev/rational-gate/m
 Preview and Preprod require separate public wallets, faucet funding, contracts,
 and validation. Follow [Windows setup](docs/SETUP_WINDOWS.md) and
 [Midnight integration](docs/MIDNIGHT.md).
+
+### Judge validation path
+
+1. Read the architecture and current limitations in this README.
+2. Run the locked install, tests, typecheck, build, and Compact compilation
+   commands above.
+3. Confirm the Preprod contract with the read-only command documented in
+   [Phase 01 deliverables](docs/PHASE_01_DELIVERABLES.md).
+4. Review the sanitized transaction evidence under `docs/evidence/phase-01`
+   when the final capture run is complete.
+
+The public hosted frontend is a limited demonstration. It intentionally does
+not expose the wallet, proof server, registrar secret, or full Midnight worker.

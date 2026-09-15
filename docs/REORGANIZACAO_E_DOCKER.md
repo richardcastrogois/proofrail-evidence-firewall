@@ -68,6 +68,9 @@ Quando `PROOFRAIL_STORE=postgres`, o container executa `prisma migrate deploy` a
 `worker/Dockerfile` empacota o processo MCP/worker atual.
 
 Importante: o worker atual usa MCP via stdio e ainda nao e o worker assincrono definitivo de producao. Por isso, no Compose ele fica atras de profile opcional.
+Quando iniciado em modo detached sem um cliente MCP anexado, o processo encerra
+normalmente com codigo `0`; isso nao deve ser interpretado como worker
+persistente em execucao.
 
 ## Docker Compose
 
@@ -211,14 +214,35 @@ docker compose config
 git diff --check
 ```
 
-Tambem foi confirmado build Docker local dos servicos padrao do Compose:
+Em 14/09/2026, foi confirmado o build Docker local dos tres servicos:
 
 ```text
 frontend: build OK
 backend: build OK
+worker: build OK
 ```
 
-O worker deve ser validado separadamente com:
+O teste de runtime tambem confirmou PostgreSQL, backend e frontend saudaveis,
+com resposta HTTP `200` em `/` e `/api/health`. Durante esse teste foram
+corrigidos o caminho do PID do Nginx para execucao nao-root e a dependencia de
+OpenSSL do Prisma no backend.
+
+O container `worker` foi buildado, iniciou o MCP e encerrou com codigo `0` sem
+cliente `stdio`. Portanto, a validacao nao afirma que existe hoje um consumidor
+assincrono persistente.
+
+Tamanhos observados no mesmo build:
+
+| Imagem | Tamanho aproximado |
+| --- | ---: |
+| `rational-gate-frontend` | 20,28 MiB |
+| `rational-gate-backend` | 211,73 MiB |
+| `rational-gate-worker` | 193,07 MiB |
+
+Esses numeros medem imagem em disco. Nao representam o pico de RAM do fluxo
+Midnight, que continua documentado no benchmark de recursos.
+
+Para repetir o build incluindo o profile opcional do worker:
 
 ```bash
 docker compose --profile worker build

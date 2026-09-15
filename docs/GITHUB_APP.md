@@ -96,7 +96,11 @@ Antes do primeiro reinício, você também pode executar explicitamente a migra�
 npm run store:migrate --workspace @rational/api
 ```
 
-O comando cria um backup v3 dentro de `data/private`, move as chaves de assinatura para `data/private/signing-secrets.json` e confirma que `data/store.json` ficou no schema v4 sem chave privada. Se o estado antigo estiver incompleto, ele falha sem gerar novas identidades silenciosamente.
+O comando aceita os stores legados suportados (`v3`, `v4` e `v5`), preserva o
+backup privado aplicavel, move as chaves de assinatura para
+`data/private/signing-secrets.json` e confirma que `data/store.json` ficou no
+schema `v6` sem chave privada. Se o estado antigo estiver incompleto, ele falha
+sem gerar novas identidades silenciosamente.
 
 ```powershell
 PowerShell -ExecutionPolicy Bypass -File .\scripts\06-run-with-midnight.ps1

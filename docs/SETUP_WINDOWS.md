@@ -228,7 +228,9 @@ Se esta pasta já tiver um store legado, migre-o uma vez antes de reiniciar:
 wsl -d Ubuntu -- bash -lc "source ~/.nvm/nvm.sh && cd /mnt/c/dev/rational-gate && npm run store:migrate --workspace @rational/api"
 ```
 
-O resultado esperado é `schema v4` sem chaves privadas no store público. O comando preserva um backup dentro de `data/private`, que já está ignorado pelo Git.
+O resultado esperado é `schema v6` sem chaves privadas no store público. O
+comando preserva o backup aplicavel dentro de `data/private`, que já está
+ignorado pelo Git.
 
 ### 3.6 Opcional: configurar o primeiro conector real
 
@@ -399,7 +401,11 @@ O servidor MCP não precisa de chave de API de IA. Ele é um adaptador determin�
 
 ## 7. Variáveis de ambiente
 
-Os scripts já fornecem os valores necessários. Para execução manual, copie `.env.example` para `.env` e exporte as variáveis no shell; o código não carrega `.env` automaticamente.
+Os scripts já fornecem os valores necessários. Para execução manual, copie
+`.env.example` para `.env`. O servidor da API carrega `.env` e `.env.local` da
+raiz no startup sem sobrescrever variáveis já definidas pelo processo. MCPs,
+CLIs e comandos isolados continuam dependendo das variáveis exportadas pelo
+shell ou fornecidas pelos scripts.
 
 | Variável | Padrão | Uso |
 |---|---|---|

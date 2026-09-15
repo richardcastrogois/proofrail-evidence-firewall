@@ -79,6 +79,8 @@ Arquivos gerados dentro de `node_modules`, `dist` e `midnight-chain/contracts/ma
 | `tsconfig.base.json` | Regras TypeScript compartilhadas. |
 | `.env.example` | Referência das variáveis de execução manual. |
 | `.gitignore` | Exclui dependências, builds, estado local e segredos. |
+| `.gitlab-ci.yml` | Pipeline de Merge Request com os jobs `verify` e `docker-build`. |
+| `docker-compose.yml` | Stack local de PostgreSQL, backend, frontend e profile opcional do MCP. |
 | `proofrail.code-workspace` | Workspace do VS Code com configurações portáveis para o projeto. |
 
 ### `docs` — documentação
@@ -92,6 +94,9 @@ Arquivos gerados dentro de `node_modules`, `dist` e `midnight-chain/contracts/ma
 | `docs/MIDNIGHT.md` | Contrato, garantias, limitações e operação nas redes Midnight. |
 | `docs/GITHUB_APP.md` | Configuração segura do primeiro conector real de CI. |
 | `docs/DEPLOYMENT_AND_NEXT_STEPS.md` | Estado confirmado, arquitetura-alvo e plano de continuidade. |
+| `docs/GITLAB_VALIDATION_GUIDE.md` | Sincronização, reprodução e aceite da pipeline GitLab. |
+| `docs/PHASE_01_DELIVERABLES.md` | Matriz dos requisitos e lacunas da primeira fase. |
+| `docs/evidence/phase-01/` | Evidências sanitizadas e manifesto do que ainda precisa ser capturado. |
 
 Diretórios como `.codex/`, `.agents/`, `.vscode/`, `data/private/` e `midnight-chain/` são estado local ou gerado e não fazem parte do repositório público.
 
