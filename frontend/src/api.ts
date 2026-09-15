@@ -15,6 +15,14 @@ export interface DeclaredDocument {
   sha256: string;
 }
 
+export interface HealthStatus {
+  ok: boolean;
+  service: string;
+  apiMode?: string;
+  mode?: string;
+  network?: string;
+}
+
 function normalizeApiBaseUrl(raw: string) {
   const value = raw.trim().replace(/\/+$/, "");
   if (value.endsWith("/api/health")) {
@@ -32,6 +40,9 @@ export const apiLimited = import.meta.env.VITE_PROOFRAIL_API_MODE === "limited";
 const STARTUP_RETRY_ATTEMPTS = 30;
 const STARTUP_RETRY_DELAY_MS = 1_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+const HEALTH_WAKE_ATTEMPTS = 45;
+const HEALTH_WAKE_DELAY_MS = 2_000;
+const HEALTH_WAKE_TIMEOUT_MS = 8_000;
 // Keep the browser window slightly above the API's 10-minute CLI ceiling.
 const MIDNIGHT_REQUEST_TIMEOUT_MS = 630_000;
 
@@ -125,7 +136,54 @@ async function request<T>(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
+function shouldRetryHealth(error: unknown) {
+  if (error instanceof TypeError || error instanceof SyntaxError) return true;
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof Error && /^HTTP (429|502|503|504)$/.test(error.message)) {
+    return true;
+  }
+  return false;
+}
+
+async function wakeHealth(): Promise<HealthStatus> {
+  if (!apiConfigured) {
+    throw new Error(
+      "API pública ainda não conectada. Configure VITE_API_URL para verificar o backend.",
+    );
+  }
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < HEALTH_WAKE_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), HEALTH_WAKE_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${baseUrl}/api/health`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!text) throw new SyntaxError("Empty health response");
+      return JSON.parse(text) as HealthStatus;
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryHealth(error) || attempt === HEALTH_WAKE_ATTEMPTS - 1) {
+        break;
+      }
+      await sleep(HEALTH_WAKE_DELAY_MS);
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? new Error(`Não foi possível conectar ao backend após aguardar o Render: ${lastError.message}`)
+    : new Error("Não foi possível conectar ao backend após aguardar o Render.");
+}
+
 export const api = {
+  health: wakeHealth,
+
   state: () =>
     request<PublicState>("/api/state", undefined, {
       startupRetries: STARTUP_RETRY_ATTEMPTS,
