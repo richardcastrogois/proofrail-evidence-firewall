@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -24,15 +25,25 @@ const authSecretsPath =
     moduleDir,
     "../../data/private/service-auth-secrets.json",
   );
+const transportMode = process.env.PROOFRAIL_WORKER_TRANSPORT ?? "stdio";
+const port = Number(process.env.PORT ?? 3334);
+const host = process.env.HOST ?? "0.0.0.0";
 const AuthSecretsSchema = z
   .object({
     schemaVersion: z.literal(1),
     tokens: z.record(z.string().min(32)),
   })
   .passthrough();
-const serviceTokens = AuthSecretsSchema.parse(
-  JSON.parse(await readFile(authSecretsPath, "utf8")),
-).tokens;
+let serviceTokensPromise: Promise<Record<string, string>> | undefined;
+
+async function loadServiceTokens() {
+  serviceTokensPromise ??= (async () => {
+    const inlineSecrets = process.env.PROOFRAIL_SERVICE_AUTH_SECRETS_JSON?.trim();
+    const raw = inlineSecrets || (await readFile(authSecretsPath, "utf8"));
+    return AuthSecretsSchema.parse(JSON.parse(raw)).tokens;
+  })();
+  return serviceTokensPromise;
+}
 
 async function api<T>(
   route: string,
@@ -40,6 +51,7 @@ async function api<T>(
   additionalHeaders: Record<string, string> = {},
   principalId = "orchestrator-local",
 ): Promise<T> {
+  const serviceTokens = await loadServiceTokens();
   const token = serviceTokens[principalId];
   if (!token) {
     throw new Error(
@@ -68,6 +80,38 @@ async function api<T>(
     );
   }
   return payload;
+}
+
+function startHttpHealthServer() {
+  const server = createServer(async (request, response) => {
+    if (request.url !== "/health" && request.url !== "/") {
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "Not found" }));
+      return;
+    }
+
+    const secretsConfigured = Boolean(
+      process.env.PROOFRAIL_SERVICE_AUTH_SECRETS_JSON?.trim() ||
+        process.env.PROOFRAIL_SERVICE_AUTH_SECRETS,
+    );
+    response.writeHead(200, {
+      "cache-control": "no-store",
+      "content-type": "application/json",
+    });
+    response.end(
+      JSON.stringify({
+        ok: true,
+        service: "proofrail-worker",
+        transport: "http",
+        apiUrl,
+        secretsConfigured,
+      }),
+    );
+  });
+
+  server.listen(port, host, () => {
+    console.log(`Proofrail worker health server listening on http://${host}:${port}`);
+  });
 }
 
 function toolResult(value: unknown) {
@@ -232,5 +276,9 @@ server.tool(
     ),
 );
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+if (transportMode === "http") {
+  startHttpHealthServer();
+} else {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
