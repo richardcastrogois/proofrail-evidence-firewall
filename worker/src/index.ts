@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -82,11 +82,52 @@ async function api<T>(
   return payload;
 }
 
+function sendJson(
+  response: ServerResponse,
+  statusCode: number,
+  payload: unknown,
+) {
+  response.writeHead(statusCode, {
+    "cache-control": "no-store",
+    "content-type": "application/json",
+  });
+  response.end(JSON.stringify(payload));
+}
+
 function startHttpHealthServer() {
   const server = createServer(async (request, response) => {
+    if (request.method !== "GET") {
+      sendJson(response, 405, { error: "Method not allowed" });
+      return;
+    }
+
+    if (request.url === "/api-state-check") {
+      try {
+        const state = await api<PublicState>("/api/state");
+        sendJson(response, 200, {
+          ok: true,
+          service: "proofrail-worker",
+          check: "api-state",
+          apiUrl,
+          selectedScenarioId: state.selectedScenarioId,
+          mode: state.mode,
+          evidenceCount: state.evidence.length,
+          decisionCount: state.decisions.length,
+        });
+      } catch (error) {
+        sendJson(response, 502, {
+          ok: false,
+          service: "proofrail-worker",
+          check: "api-state",
+          apiUrl,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return;
+    }
+
     if (request.url !== "/health" && request.url !== "/") {
-      response.writeHead(404, { "content-type": "application/json" });
-      response.end(JSON.stringify({ error: "Not found" }));
+      sendJson(response, 404, { error: "Not found" });
       return;
     }
 
@@ -94,19 +135,13 @@ function startHttpHealthServer() {
       process.env.PROOFRAIL_SERVICE_AUTH_SECRETS_JSON?.trim() ||
         process.env.PROOFRAIL_SERVICE_AUTH_SECRETS,
     );
-    response.writeHead(200, {
-      "cache-control": "no-store",
-      "content-type": "application/json",
+    sendJson(response, 200, {
+      ok: true,
+      service: "proofrail-worker",
+      transport: "http",
+      apiUrl,
+      secretsConfigured,
     });
-    response.end(
-      JSON.stringify({
-        ok: true,
-        service: "proofrail-worker",
-        transport: "http",
-        apiUrl,
-        secretsConfigured,
-      }),
-    );
   });
 
   server.listen(port, host, () => {
