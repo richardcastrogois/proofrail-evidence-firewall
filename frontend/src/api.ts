@@ -15,7 +15,18 @@ export interface DeclaredDocument {
   sha256: string;
 }
 
-const baseUrl = (import.meta.env.VITE_API_URL ?? "").trim();
+function normalizeApiBaseUrl(raw: string) {
+  const value = raw.trim().replace(/\/+$/, "");
+  if (value.endsWith("/api/health")) {
+    return value.slice(0, -"/api/health".length);
+  }
+  if (value.endsWith("/api")) {
+    return value.slice(0, -"/api".length);
+  }
+  return value;
+}
+
+const baseUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_URL ?? "");
 export const apiConfigured = baseUrl.length > 0;
 export const apiLimited = import.meta.env.VITE_PROOFRAIL_API_MODE === "limited";
 const STARTUP_RETRY_ATTEMPTS = 30;
