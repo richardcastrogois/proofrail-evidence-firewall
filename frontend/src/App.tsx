@@ -46,6 +46,7 @@ gsap.registerPlugin(useGSAP, ScrollTrigger, ScrollToPlugin);
 type Surface = "overview" | "lab";
 type MotionMode = "full" | "reduced";
 type LabDocument = DeclaredDocument & { source: "sample" | "upload" };
+type ConnectionStatus = "idle" | "checking" | "online" | "offline";
 
 const networkCopy: Record<
   NetworkId,
@@ -198,6 +199,7 @@ export function App() {
   const [busySince, setBusySince] = useState<number | null>(null);
   const [busyElapsedSeconds, setBusyElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [motionMode, setMotionMode] = useState<MotionMode>(() => {
     const saved = window.localStorage.getItem("proofrail-motion");
     return saved === "reduced" ? "reduced" : "full";
@@ -238,6 +240,25 @@ export function App() {
         : current,
     );
     return next;
+  }
+
+  async function checkConnection() {
+    if (!apiConfigured) {
+      setConnectionStatus("offline");
+      setError(disconnectedMessage);
+      return;
+    }
+
+    setConnectionStatus("checking");
+    setError(null);
+    try {
+      await api.health();
+      await refresh();
+      setConnectionStatus("online");
+    } catch (caught) {
+      setConnectionStatus("offline");
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
   }
 
   async function run(label: string, task: () => Promise<unknown>) {
@@ -595,6 +616,25 @@ export function App() {
         </nav>
 
         <div className="header-dynamic" ref={headerDynamicRef}>
+        <button
+          className={`connection-check ${connectionStatus}`}
+          disabled={connectionStatus === "checking"}
+          onClick={checkConnection}
+          type="button"
+        >
+          {connectionStatus === "checking" ? <RefreshCcw className="spin" /> : null}
+          {connectionStatus === "online" ? <CheckCircle2 /> : null}
+          {connectionStatus === "offline" ? <TriangleAlert /> : null}
+          <span>
+            {connectionStatus === "checking"
+              ? "Verificando..."
+              : connectionStatus === "online"
+                ? "Conexão ok"
+                : connectionStatus === "offline"
+                  ? "Tentar conexão"
+                  : "Verificar conexão"}
+          </span>
+        </button>
         {surface === "lab" ? (
           <div className="network-switcher" aria-label="Rede Midnight">
             <span className="network-title"><Network /> Ambiente</span>
@@ -619,6 +659,17 @@ export function App() {
         )}
         </div>
       </header>
+
+      {connectionStatus === "checking" ? (
+        <div className="connection-loading" role="status" aria-live="polite">
+          <div>
+            <span className="connection-spinner" aria-hidden="true" />
+            <strong>Verificando conexão</strong>
+            <span>O backend pode levar alguns segundos para acordar.</span>
+            <small>Aguarde, isso pode demorar até 90 segundos.</small>
+          </div>
+        </div>
+      ) : null}
 
       <button
         className="motion-toggle"
