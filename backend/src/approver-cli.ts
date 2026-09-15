@@ -10,7 +10,7 @@ import { z } from "zod";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir =
-  process.env.DATA_DIR ?? path.resolve(moduleDir, "../../../data");
+  process.env.DATA_DIR ?? path.resolve(moduleDir, "../../data");
 const secretsPath =
   process.env.PROOFRAIL_SERVICE_AUTH_SECRETS ??
   path.join(dataDir, "private", "service-auth-secrets.json");

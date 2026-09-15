@@ -18,6 +18,8 @@ executar localmente.
    producao.
 6. [Deploy e proximos passos](DEPLOYMENT_AND_NEXT_STEPS.md) - estado confirmado,
    arquitetura-alvo e plano de continuidade.
+7. [Entregaveis da Fase 01](PHASE_01_DELIVERABLES.md) - requisitos, evidencias,
+   lacunas e criterio de pronto para submissao.
 
 ## Referencia por assunto
 
@@ -27,6 +29,10 @@ executar localmente.
 - [Benchmark Midnight](MIDNIGHT_RESOURCE_BENCHMARK.md) - metodologia, dados e
   conclusao de capacidade.
 - [Setup Windows](SETUP_WINDOWS.md) - instalacao e diagnostico em Windows/WSL.
+- [Validacao do GitLab](GITLAB_VALIDATION_GUIDE.md) - sincronizacao de branches,
+  reproducao da CI e verificacao da pipeline.
+- [Manifesto de evidencias da Fase 01](evidence/phase-01/README.md) - local e
+  regras para capturas sanitizadas.
 
 ## Principios de manutencao
 

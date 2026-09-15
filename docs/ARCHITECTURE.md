@@ -79,6 +79,8 @@ Arquivos gerados dentro de `node_modules`, `dist` e `midnight-chain/contracts/ma
 | `tsconfig.base.json` | Regras TypeScript compartilhadas. |
 | `.env.example` | Referência das variáveis de execução manual. |
 | `.gitignore` | Exclui dependências, builds, estado local e segredos. |
+| `.gitlab-ci.yml` | Pipeline de Merge Request com os jobs `verify` e `docker-build`. |
+| `docker-compose.yml` | Stack local de PostgreSQL, backend, frontend e profile opcional do MCP. |
 | `proofrail.code-workspace` | Workspace do VS Code com configurações portáveis para o projeto. |
 
 ### `docs` — documentação
@@ -92,56 +94,59 @@ Arquivos gerados dentro de `node_modules`, `dist` e `midnight-chain/contracts/ma
 | `docs/MIDNIGHT.md` | Contrato, garantias, limitações e operação nas redes Midnight. |
 | `docs/GITHUB_APP.md` | Configuração segura do primeiro conector real de CI. |
 | `docs/DEPLOYMENT_AND_NEXT_STEPS.md` | Estado confirmado, arquitetura-alvo e plano de continuidade. |
+| `docs/GITLAB_VALIDATION_GUIDE.md` | Sincronização, reprodução e aceite da pipeline GitLab. |
+| `docs/PHASE_01_DELIVERABLES.md` | Matriz dos requisitos e lacunas da primeira fase. |
+| `docs/evidence/phase-01/` | Evidências sanitizadas e manifesto do que ainda precisa ser capturado. |
 
 Diretórios como `.codex/`, `.agents/`, `.vscode/`, `data/private/` e `midnight-chain/` são estado local ou gerado e não fazem parte do repositório público.
 
-### `apps/web` — interface
+### `frontend` — interface
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `apps/web/index.html` | Documento HTML usado pelo Vite. |
-| `apps/web/package.json` | Dependências e scripts do frontend. |
-| `apps/web/vite.config.ts` | Servidor Vite, porta e proxy de desenvolvimento. |
-| `apps/web/tsconfig.json` | Configuração TypeScript do React. |
-| `apps/web/src/main.tsx` | Ponto de montagem do React. |
-| `apps/web/src/App.tsx` | Toda a experiência: rede, cenários, ação, origens, fluxo automático, decisão, lifecycle e auditoria. |
-| `apps/web/src/api.ts` | Cliente HTTP tipado para as rotas Fastify. |
-| `apps/web/src/styles.css` | Direção visual editorial/operacional, layout responsivo e estados de interação. |
+| `frontend/index.html` | Documento HTML usado pelo Vite. |
+| `frontend/package.json` | Dependências e scripts do frontend. |
+| `frontend/vite.config.ts` | Servidor Vite, porta e proxy de desenvolvimento. |
+| `frontend/tsconfig.json` | Configuração TypeScript do React. |
+| `frontend/src/main.tsx` | Ponto de montagem do React. |
+| `frontend/src/App.tsx` | Toda a experiência: rede, cenários, ação, origens, fluxo automático, decisão, lifecycle e auditoria. |
+| `frontend/src/api.ts` | Cliente HTTP tipado para as rotas Fastify. |
+| `frontend/src/styles.css` | Direção visual editorial/operacional, layout responsivo e estados de interação. |
 
-### `apps/api` — orquestração e segurança da aplicação
-
-| Arquivo | Responsabilidade |
-|---|---|
-| `apps/api/package.json` | Dependências e scripts da API. |
-| `apps/api/tsconfig.json` | Configuração TypeScript da API. |
-| `apps/api/src/server.ts` | Inicializa Fastify, restringe CORS ao localhost, define limites e registra rotas. |
-| `apps/api/src/routes.ts` | Endpoints, validação Zod, registro de documento autodeclarado, avaliação, âncora, permit, execução, reset e lifecycle. |
-| `apps/api/src/access-control.ts` | Matriz declarativa de autenticação e menor scope por rota. |
-| `apps/api/src/day03-contracts.self-test.ts` | Testes negativos dos contratos de principal, aprovação, execução, idempotência, erros e matriz de rotas. |
-| `apps/api/src/service-auth.ts` | Autenticação bearer em tempo constante, cadastro confiável de principals/aprovadores e enforcement da matriz de scopes. |
-| `apps/api/src/service-auth-init.ts` | Gera configuração local separando hashes/chaves públicas dos segredos de cliente, sem imprimir credenciais. |
-| `apps/api/src/approver-cli.ts` | Assina a aprovação canônica com a identidade humana local e chama a rota autenticada. |
-| `apps/api/src/executor.ts` | Executor fechado de `workflow_dispatch`, allowlists e credencial de escrita separada do conector CI. |
-| `apps/api/src/executor.self-test.ts` | Valida request fechado, allowlists, corpo do dispatch e ausência do token no payload. |
-| `apps/api/src/store.ts` | Estado JSON v6, migrações fail-closed v3→v6, separação de chaves e gravação serializada/atômica. |
-| `apps/api/src/store-migrate.ts` | Executa e verifica explicitamente a migração do store ativo para o schema v6 sem imprimir segredos. |
-| `apps/api/src/types.ts` | Tipos internos do banco, identidades de origem e ciphertext. |
-| `apps/api/src/origins.ts` | Recibos simulados e recibo real do GitHub CI: normalização, AES-256-GCM e assinatura. |
-| `apps/api/src/github.ts` | GitHub App, JWT, token de instalação, HMAC do webhook, identidade do agente e validação de workflow/artefato. |
-| `apps/api/src/github.self-test.ts` | Testes positivos e negativos do conector GitHub sem usar credenciais reais. |
-| `apps/api/src/github-routes.self-test.ts` | Teste HTTP isolado do webhook e da verificação CI: HMAC, replay, colisão, commit, artefato e recibo adulterado. |
-| `apps/api/src/approval-routes.self-test.ts` | Testa escopo, independência, commitments, assinatura e replay de aprovação. |
-| `apps/api/src/store.self-test.ts` | Valida migrações v3/v4/v5→v6 e confirma que chaves privadas não permanecem no store público. |
-| `apps/api/src/agent-cli.ts` | Gera identidade local de desenvolvimento e assina a ação canônica do agente. |
-| `apps/api/src/midnight-adapter.ts` | Lê a rede ativa, troca Local/Preview/Preprod e chama a CLI para ancorar. |
-
-### `apps/mcp` — uso por agentes
+### `backend` — orquestração e segurança da aplicação
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `apps/mcp/package.json` | Dependências e scripts do servidor MCP. |
-| `apps/mcp/tsconfig.json` | Configuração TypeScript do MCP. |
-| `apps/mcp/src/index.ts` | Ferramentas para consultar estado, verificar GitHub CI, selecionar cenário/rede, rodar fluxo, executar permit e apagar chaves. |
+| `backend/package.json` | Dependências e scripts da API. |
+| `backend/tsconfig.json` | Configuração TypeScript da API. |
+| `backend/src/server.ts` | Inicializa Fastify, restringe CORS ao localhost, define limites e registra rotas. |
+| `backend/src/routes.ts` | Endpoints, validação Zod, registro de documento autodeclarado, avaliação, âncora, permit, execução, reset e lifecycle. |
+| `backend/src/access-control.ts` | Matriz declarativa de autenticação e menor scope por rota. |
+| `backend/src/day03-contracts.self-test.ts` | Testes negativos dos contratos de principal, aprovação, execução, idempotência, erros e matriz de rotas. |
+| `backend/src/service-auth.ts` | Autenticação bearer em tempo constante, cadastro confiável de principals/aprovadores e enforcement da matriz de scopes. |
+| `backend/src/service-auth-init.ts` | Gera configuração local separando hashes/chaves públicas dos segredos de cliente, sem imprimir credenciais. |
+| `backend/src/approver-cli.ts` | Assina a aprovação canônica com a identidade humana local e chama a rota autenticada. |
+| `backend/src/executor.ts` | Executor fechado de `workflow_dispatch`, allowlists e credencial de escrita separada do conector CI. |
+| `backend/src/executor.self-test.ts` | Valida request fechado, allowlists, corpo do dispatch e ausência do token no payload. |
+| `backend/src/store.ts` | Estado JSON v6, migrações fail-closed v3→v6, separação de chaves e gravação serializada/atômica. |
+| `backend/src/store-migrate.ts` | Executa e verifica explicitamente a migração do store ativo para o schema v6 sem imprimir segredos. |
+| `backend/src/types.ts` | Tipos internos do banco, identidades de origem e ciphertext. |
+| `backend/src/origins.ts` | Recibos simulados e recibo real do GitHub CI: normalização, AES-256-GCM e assinatura. |
+| `backend/src/github.ts` | GitHub App, JWT, token de instalação, HMAC do webhook, identidade do agente e validação de workflow/artefato. |
+| `backend/src/github.self-test.ts` | Testes positivos e negativos do conector GitHub sem usar credenciais reais. |
+| `backend/src/github-routes.self-test.ts` | Teste HTTP isolado do webhook e da verificação CI: HMAC, replay, colisão, commit, artefato e recibo adulterado. |
+| `backend/src/approval-routes.self-test.ts` | Testa escopo, independência, commitments, assinatura e replay de aprovação. |
+| `backend/src/store.self-test.ts` | Valida migrações v3/v4/v5→v6 e confirma que chaves privadas não permanecem no store público. |
+| `backend/src/agent-cli.ts` | Gera identidade local de desenvolvimento e assina a ação canônica do agente. |
+| `backend/src/midnight-adapter.ts` | Lê a rede ativa, troca Local/Preview/Preprod e chama a CLI para ancorar. |
+
+### `worker` — uso por agentes
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `worker/package.json` | Dependências e scripts do servidor MCP. |
+| `worker/tsconfig.json` | Configuração TypeScript do MCP. |
+| `worker/src/index.ts` | Ferramentas para consultar estado, verificar GitHub CI, selecionar cenário/rede, rodar fluxo, executar permit e apagar chaves. |
 
 ### `packages/shared` — contrato entre aplicações
 

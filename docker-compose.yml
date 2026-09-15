@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: proofrail
+      POSTGRES_USER: proofrail
+      POSTGRES_PASSWORD: proofrail
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proofrail -d proofrail"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3333
+      DATABASE_URL: postgresql://proofrail:proofrail@postgres:5432/proofrail
+      DATABASE_URL_UNPOOLED: postgresql://proofrail:proofrail@postgres:5432/proofrail
+      PROOFRAIL_STORE: postgres
+      PROOFRAIL_PUBLIC_API_MODE: limited
+      PROOFRAIL_PUBLIC_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      MIDNIGHT_MODE: local
+    ports:
+      - "3333:3333"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3333/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3333
+        VITE_PROOFRAIL_API_MODE: limited
+    ports:
+      - "8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  worker:
+    profiles: ["worker"]
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      PROOFRAIL_API_URL: http://backend:3333
+      PROOFRAIL_SERVICE_AUTH_SECRETS: /app/data/private/service-auth-secrets.json
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

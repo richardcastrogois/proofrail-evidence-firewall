@@ -12,7 +12,7 @@ import {
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir =
-  process.env.DATA_DIR ?? path.resolve(moduleDir, "../../../data");
+  process.env.DATA_DIR ?? path.resolve(moduleDir, "../../data");
 const privateDir = path.join(dataDir, "private");
 const configPath =
   process.env.PROOFRAIL_SERVICE_AUTH_CONFIG ??

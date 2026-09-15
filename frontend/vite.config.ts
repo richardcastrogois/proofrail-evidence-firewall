@@ -11,14 +11,14 @@ import react from "@vitejs/plugin-react";
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(async ({ command, mode }) => {
-  const env = loadEnv(mode, path.resolve(moduleDir, "../.."), "");
+  const env = loadEnv(mode, path.resolve(moduleDir, ".."), "");
   let tokens: Record<string, string> = {};
   if (command === "serve") {
     const secretsPath =
       env.PROOFRAIL_SERVICE_AUTH_SECRETS ||
       path.resolve(
         moduleDir,
-        "../../data/private/service-auth-secrets.json",
+        "../data/private/service-auth-secrets.json",
       );
     const parsed = JSON.parse(await readFile(secretsPath, "utf8")) as {
       tokens?: Record<string, string>;

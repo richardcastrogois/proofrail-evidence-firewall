@@ -355,7 +355,7 @@ export async function loadServiceAuthenticator(input: {
   }
 
   const dataDir =
-    env.DATA_DIR ?? path.resolve(moduleDir, "../../../data");
+    env.DATA_DIR ?? path.resolve(moduleDir, "../../data");
   const configPath =
     input.configPath ??
     env.PROOFRAIL_SERVICE_AUTH_CONFIG ??

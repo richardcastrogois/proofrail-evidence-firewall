@@ -121,9 +121,10 @@ React/Vite web
 
 Core components:
 
-- `apps/web` - product interface and network-aware decision workflow;
-- `apps/api` - evidence collection, policy orchestration, authorization,
+- `frontend` - product interface and network-aware decision workflow;
+- `backend` - evidence collection, policy orchestration, authorization,
   execution, logging, and API/MCP boundaries;
+- `worker` - MCP tools and auxiliary agent-facing operations;
 - `packages/core` - commitments, signatures, encryption, Merkle roots, and
   deterministic policy evaluation;
 - `packages/shared` - runtime schemas and contracts shared across services;
@@ -136,35 +137,35 @@ should connect its own identity provider, scanner, transactional database,
 KMS/HSM, observability, rate limiting, rollback, and destination-specific
 execution adapter.
 
+The three maintainers approved publication under the
+[Apache License 2.0](LICENSE). Dependency licenses and the generated local
+Midnight scaffold remain governed by their respective terms.
+
 ## Hosted deployment
 
 The repository contains the deployment foundation for a public frontend and a
-limited public API:
+separate backend service:
 
-- `vercel.json` publishes the Vite web application and a short Vercel Function
-  under `/api/*`;
+- `vercel.json` publishes only the Vite web application from `frontend`;
 - `packages/database/prisma` contains the PostgreSQL/Neon data contract and
   first migration;
 - `PROOFRAIL_STORE=postgres` enables the PostgreSQL state adapter while keeping
   signing secrets outside the database;
 - when `VITE_API_URL` is absent, the browser bundle renders a frontend-only
   preview and refuses backend actions;
-- when `VITE_API_URL=.` and `VITE_PROOFRAIL_API_MODE=limited`, the browser uses
-  the same Vercel deployment for read-only state and safe public declarations;
-- `npm run deploy:preflight` refuses API publication until public origins and
-  PostgreSQL are configured. The API can only be published before the worker in
-  `PROOFRAIL_PUBLIC_API_MODE=limited`, where Midnight anchoring, approvals,
-  network switching and execution return `503`.
+- when `VITE_API_URL` points to the deployed backend, the browser uses that
+  external API for state, decisions and execution flows;
+- `api/` remains in the repository temporarily for compatibility, but it is no
+  longer part of the Vercel deployment.
 
 Current hosted deployment:
 
 - <https://proofrail-nu.vercel.app>
 - <https://proofrail-juaug0uys-richard-castro-gois-projects.vercel.app>
 
-This deployment publishes the frontend and a limited `/api/*`. It does not
-publish the worker, the wallet, the proof server, or any Midnight secret. The
-health endpoint reports `apiMode=limited`, `mode=local`, and
-`network=undeployed` until the worker architecture is approved and isolated.
+This deployment publishes only the frontend. It does not publish the backend,
+worker, wallet, proof server, or any Midnight secret. Backend access must be
+configured explicitly through `VITE_API_URL`.
 
 The public Midnight worker and durable queue are deliberately not included in
 the Vercel deployment. A browser or serverless function must never receive a
@@ -185,9 +186,38 @@ cloud resources or exposing an API.
 - [Midnight resource benchmark](docs/MIDNIGHT_RESOURCE_BENCHMARK.md)
 - [Windows setup](docs/SETUP_WINDOWS.md)
 - [Deployment and next steps](docs/DEPLOYMENT_AND_NEXT_STEPS.md)
+- [Phase 01 deliverables and evidence](docs/PHASE_01_DELIVERABLES.md)
+- [GitLab validation guide](docs/GITLAB_VALIDATION_GUIDE.md)
 - [Documentation index](docs/README.md)
 
+## License
+
+Proofrail is licensed under the [Apache License 2.0](LICENSE).
+
 ## Run locally
+
+### Docker
+
+The repository provides separate images for each runtime boundary:
+
+- `frontend/Dockerfile` - static Vite build served by Nginx;
+- `backend/Dockerfile` - Fastify API, ready for Render or another container host;
+- `worker/Dockerfile` - MCP/worker process, optional in local Compose;
+- `docker-compose.yml` - local stack with frontend, backend and PostgreSQL.
+
+Run the default stack:
+
+~~~bash
+npm run docker:up
+~~~
+
+The frontend is exposed at `http://localhost:8080` and the backend at
+`http://localhost:3333`. The worker is optional because the current process uses
+MCP over stdio:
+
+~~~bash
+docker compose --profile worker up --build
+~~~
 
 ### Requirements
 
@@ -251,3 +281,16 @@ wsl -d Ubuntu -- bash -lc "source ~/.nvm/nvm.sh && cd /mnt/c/dev/rational-gate/m
 Preview and Preprod require separate public wallets, faucet funding, contracts,
 and validation. Follow [Windows setup](docs/SETUP_WINDOWS.md) and
 [Midnight integration](docs/MIDNIGHT.md).
+
+### Judge validation path
+
+1. Read the architecture and current limitations in this README.
+2. Run the locked install, tests, typecheck, build, and Compact compilation
+   commands above.
+3. Confirm the Preprod contract with the read-only command documented in
+   [Phase 01 deliverables](docs/PHASE_01_DELIVERABLES.md).
+4. Review the sanitized transaction evidence under `docs/evidence/phase-01`
+   when the final capture run is complete.
+
+The public hosted frontend is a limited demonstration. It intentionally does
+not expose the wallet, proof server, registrar secret, or full Midnight worker.

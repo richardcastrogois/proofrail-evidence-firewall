@@ -17,7 +17,7 @@ if (!agentId || !/^[A-Za-z0-9_.-]{1,120}$/.test(agentId)) {
 }
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = process.env.DATA_DIR ?? path.resolve(moduleDir, "../../../data");
+const dataDir = process.env.DATA_DIR ?? path.resolve(moduleDir, "../../data");
 const agentDir = path.join(dataDir, "private", "agents");
 const privateKeyPath = path.join(agentDir, `${agentId}.private.pem`);
 const publicKeyPath = path.join(agentDir, `${agentId}.public.pem`);
