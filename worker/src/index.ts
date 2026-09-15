@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { createServer, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -28,6 +32,12 @@ const authSecretsPath =
 const transportMode = process.env.PROOFRAIL_WORKER_TRANSPORT ?? "stdio";
 const port = Number(process.env.PORT ?? 3334);
 const host = process.env.HOST ?? "0.0.0.0";
+const allowedBrowserOrigins = new Set(
+  (process.env.PROOFRAIL_PUBLIC_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
 const AuthSecretsSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -83,28 +93,140 @@ async function api<T>(
 }
 
 function sendJson(
+  request: IncomingMessage,
   response: ServerResponse,
   statusCode: number,
   payload: unknown,
 ) {
-  response.writeHead(statusCode, {
+  response.writeHead(statusCode, responseHeaders(request, {
     "cache-control": "no-store",
     "content-type": "application/json",
-  });
+  }));
   response.end(JSON.stringify(payload));
+}
+
+function responseHeaders(
+  request: IncomingMessage,
+  headers: Record<string, string> = {},
+) {
+  const origin = request.headers.origin;
+  if (typeof origin === "string" && allowedBrowserOrigins.has(origin)) {
+    return {
+      ...headers,
+      "access-control-allow-origin": origin,
+      "access-control-allow-headers": "content-type, idempotency-key, x-request-id",
+      "access-control-allow-methods": "GET,POST,OPTIONS",
+      vary: "Origin",
+    };
+  }
+  return headers;
+}
+
+async function readRequestBody(request: IncomingMessage) {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function principalForRoute(method: string, pathname: string) {
+  if (method === "GET" && pathname === "/api/state") return "orchestrator-local";
+  if (method === "POST" && pathname === "/api/integrations/github/verify-ci") return "orchestrator-local";
+  if (method === "POST" && pathname === "/api/evidence/self-declared") return "orchestrator-local";
+  if (method === "POST" && pathname === "/api/evidence/document") return "orchestrator-local";
+  if (method === "POST" && pathname === "/api/evidence/collect") return "orchestrator-local";
+  if (method === "POST" && pathname === "/api/evaluate") return "orchestrator-local";
+  if (method === "POST" && pathname === "/api/scenario/select") return "operator-local";
+  if (method === "POST" && pathname === "/api/network/select") return "operator-local";
+  if (method === "POST" && pathname === "/api/simulation/run") return "operator-local";
+  if (method === "POST" && pathname === "/api/lifecycle/expire") return "operator-local";
+  if (method === "POST" && pathname === "/api/reset") return "operator-local";
+  if (method === "POST" && pathname === "/api/execute") return "executor-local";
+  return undefined;
+}
+
+async function proxyApiRequest(request: IncomingMessage, response: ServerResponse) {
+  const url = new URL(request.url ?? "/", "http://worker.local");
+  const pathname = url.pathname;
+  if (request.method === "GET" && pathname === "/api/health") {
+    const backendResponse = await fetch(`${apiUrl}/api/health`, { cache: "no-store" });
+    const body = await backendResponse.text();
+    response.writeHead(backendResponse.status, responseHeaders(request, {
+      "cache-control": "no-store",
+      "content-type": backendResponse.headers.get("content-type") ?? "application/json",
+    }));
+    response.end(body);
+    return;
+  }
+
+  const principalId = principalForRoute(request.method ?? "GET", pathname);
+  if (!principalId) {
+    sendJson(request, response, 404, { error: "Unsupported worker API route" });
+    return;
+  }
+
+  const serviceTokens = await loadServiceTokens();
+  const token = serviceTokens[principalId];
+  if (!token) {
+    sendJson(request, response, 500, { error: `Worker token is unavailable for ${principalId}` });
+    return;
+  }
+
+  const body = request.method === "GET" ? undefined : await readRequestBody(request);
+  const backendResponse = await fetch(`${apiUrl}${pathname}${url.search}`, {
+    method: request.method,
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(body ? { "content-type": request.headers["content-type"] ?? "application/json" } : {}),
+      ...(typeof request.headers["idempotency-key"] === "string"
+        ? { "idempotency-key": request.headers["idempotency-key"] }
+        : {}),
+      ...(typeof request.headers["x-request-id"] === "string"
+        ? { "x-request-id": request.headers["x-request-id"] }
+        : {}),
+    },
+    body,
+  });
+  const responseBody = await backendResponse.text();
+  response.writeHead(backendResponse.status, responseHeaders(request, {
+    "cache-control": "no-store",
+    "content-type": backendResponse.headers.get("content-type") ?? "application/json",
+  }));
+  response.end(responseBody);
 }
 
 function startHttpHealthServer() {
   const server = createServer(async (request, response) => {
+    if (request.method === "OPTIONS") {
+      response.writeHead(204, responseHeaders(request));
+      response.end();
+      return;
+    }
+
+    const url = new URL(request.url ?? "/", "http://worker.local");
+    if (url.pathname.startsWith("/api/")) {
+      try {
+        await proxyApiRequest(request, response);
+      } catch (error) {
+        sendJson(request, response, 502, {
+          ok: false,
+          service: "proofrail-worker",
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return;
+    }
+
     if (request.method !== "GET") {
-      sendJson(response, 405, { error: "Method not allowed" });
+      sendJson(request, response, 405, { error: "Method not allowed" });
       return;
     }
 
     if (request.url === "/api-state-check") {
       try {
         const state = await api<PublicState>("/api/state");
-        sendJson(response, 200, {
+        sendJson(request, response, 200, {
           ok: true,
           service: "proofrail-worker",
           check: "api-state",
@@ -115,7 +237,7 @@ function startHttpHealthServer() {
           decisionCount: state.decisions.length,
         });
       } catch (error) {
-        sendJson(response, 502, {
+        sendJson(request, response, 502, {
           ok: false,
           service: "proofrail-worker",
           check: "api-state",
@@ -127,7 +249,7 @@ function startHttpHealthServer() {
     }
 
     if (request.url !== "/health" && request.url !== "/") {
-      sendJson(response, 404, { error: "Not found" });
+      sendJson(request, response, 404, { error: "Not found" });
       return;
     }
 
@@ -135,7 +257,7 @@ function startHttpHealthServer() {
       process.env.PROOFRAIL_SERVICE_AUTH_SECRETS_JSON?.trim() ||
         process.env.PROOFRAIL_SERVICE_AUTH_SECRETS,
     );
-    sendJson(response, 200, {
+    sendJson(request, response, 200, {
       ok: true,
       service: "proofrail-worker",
       transport: "http",
