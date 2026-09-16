@@ -200,6 +200,7 @@ export function App() {
   const [busyElapsedSeconds, setBusyElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
+  const [stateLoading, setStateLoading] = useState(false);
   const [motionMode, setMotionMode] = useState<MotionMode>(() => {
     const saved = window.localStorage.getItem("proofrail-motion");
     return saved === "reduced" ? "reduced" : "full";
@@ -242,6 +243,13 @@ export function App() {
     return next;
   }
 
+  function connectionLabel() {
+    if (connectionStatus === "checking") return "Ligando backend";
+    if (connectionStatus === "online") return "Online";
+    if (connectionStatus === "offline") return "Backend indisponível";
+    return "Backend aguardando";
+  }
+
   async function checkConnection() {
     if (!apiConfigured) {
       setConnectionStatus("offline");
@@ -250,13 +258,20 @@ export function App() {
     }
 
     setConnectionStatus("checking");
+    setStateLoading(false);
     setError(null);
+    let backendOnline = false;
     try {
       await api.health();
+      backendOnline = true;
+      setConnectionStatus("online");
+      setStateLoading(true);
       await refresh();
+      setStateLoading(false);
       setConnectionStatus("online");
     } catch (caught) {
-      setConnectionStatus("offline");
+      setConnectionStatus(backendOnline ? "online" : "offline");
+      setStateLoading(false);
       setError(caught instanceof Error ? caught.message : String(caught));
     }
   }
@@ -284,6 +299,10 @@ export function App() {
   }
 
   useEffect(() => {
+    if (apiConfigured) {
+      checkConnection();
+      return;
+    }
     refresh().catch((caught) =>
       setError(caught instanceof Error ? caught.message : String(caught)),
     );
@@ -392,12 +411,43 @@ export function App() {
   }, [state]);
 
   if (!state || !action) {
+    const connecting = connectionStatus === "checking";
+    const loadingState = connectionStatus === "online" && stateLoading;
+    const stateFailed = connectionStatus === "online" && Boolean(error);
+    const offline = connectionStatus === "offline";
     return (
       <main className="loading-screen">
-        <div className="loader-mark"><Fingerprint /></div>
-        <strong>Preparando o Proofrail</strong>
-        <p>Carregando políticas, cenários e estado da rede.</p>
+        <div className={connecting || loadingState ? "loader-mark loading" : "loader-mark"}>
+          {connecting || loadingState ? <span className="connection-spinner" aria-hidden="true" /> : offline || stateFailed ? <TriangleAlert /> : <Fingerprint />}
+        </div>
+        <strong>
+          {connecting
+            ? "Ligando backend"
+            : loadingState
+              ? "Carregando estado"
+              : stateFailed
+                ? "Não foi possível carregar o estado"
+                : offline
+                  ? "Backend indisponível"
+                  : "Preparando o Proofrail"}
+        </strong>
+        <p>
+          {connecting
+            ? "Aguardando o worker e a API no Render responderem. Isso pode levar até 90 segundos."
+            : loadingState
+              ? "Backend conectado. Buscando políticas, cenários e evidências."
+              : stateFailed
+                ? "Backend conectado, mas a API retornou erro ao buscar /api/state."
+            : offline
+              ? "Não foi possível conectar ao backend. Verifique o worker no Render e recarregue a página."
+              : "Carregando políticas, cenários e estado da rede."}
+        </p>
         {error ? <span>{error}</span> : null}
+        {(offline || stateFailed) && apiConfigured ? (
+          <button className="loading-retry" onClick={checkConnection} type="button">
+            <RefreshCcw /> Tentar novamente
+          </button>
+        ) : null}
       </main>
     );
   }
@@ -512,6 +562,12 @@ export function App() {
       return;
     }
 
+    const currentState = state;
+    if (!currentState || currentState.mode !== "cli") {
+      setError("Troca de rede exige backend com MIDNIGHT_MODE=cli. A demonstração hospedada usa o simulador local.");
+      return;
+    }
+
     await run("network", () => api.selectNetwork(network));
   }
 
@@ -602,7 +658,14 @@ export function App() {
       <header className="masthead">
         <button className="wordmark" onClick={() => openSurface("overview")} aria-label="Proofrail — visão geral">
           <span className="wordmark-symbol"><Fingerprint /></span>
-          <span><strong>Proofrail</strong><small>Evidence firewall</small></span>
+          <span>
+            <strong>Proofrail</strong>
+            <small>Evidence firewall</small>
+            <em className={`connection-inline ${connectionStatus}`}>
+              <i aria-hidden="true" />
+              {connectionLabel()}
+            </em>
+          </span>
         </button>
 
         <nav className="surface-nav" aria-label="Navegação principal">
@@ -616,39 +679,27 @@ export function App() {
         </nav>
 
         <div className="header-dynamic" ref={headerDynamicRef}>
-        <button
-          className={`connection-check ${connectionStatus}`}
-          disabled={connectionStatus === "checking"}
-          onClick={checkConnection}
-          type="button"
-        >
-          {connectionStatus === "checking" ? <RefreshCcw className="spin" /> : null}
-          {connectionStatus === "online" ? <CheckCircle2 /> : null}
-          {connectionStatus === "offline" ? <TriangleAlert /> : null}
-          <span>
-            {connectionStatus === "checking"
-              ? "Verificando..."
-              : connectionStatus === "online"
-                ? "Conexão ok"
-                : connectionStatus === "offline"
-                  ? "Tentar conexão"
-                  : "Verificar conexão"}
-          </span>
-        </button>
         {surface === "lab" ? (
           <div className="network-switcher" aria-label="Rede Midnight">
             <span className="network-title"><Network /> Ambiente</span>
             <div className="network-options">
               {(Object.keys(networkCopy) as NetworkId[]).map((network) => (
-                <button
-                  className={state.network.active === network ? "active" : ""}
-                  disabled={busy !== null || apiLimited}
-                  key={network}
-                  onClick={() => chooseNetwork(network)}
-                >
-                  <span className={state.network.deployments[network] ? "status-dot ready" : "status-dot"} />
-                  {networkCopy[network].short}
-                </button>
+                (() => {
+                  const available = network === "undeployed" && state.mode === "local"
+                    ? true
+                    : Boolean(state.network.deployments[network]);
+                  return (
+                    <button
+                      className={state.network.active === network ? "active" : ""}
+                      disabled={busy !== null || apiLimited || state.mode !== "cli"}
+                      key={network}
+                      onClick={() => chooseNetwork(network)}
+                    >
+                      <span className={available ? "status-dot ready" : "status-dot"} />
+                      {networkCopy[network].short}
+                    </button>
+                  );
+                })()
               ))}
             </div>
           </div>
